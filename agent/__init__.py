@@ -1,0 +1,1 @@
+"""Baseline document-verification agent."""

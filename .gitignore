@@ -1,0 +1,7 @@
+runs/
+.env
+__pycache__/
+.venv/
+.pytest_cache/
+.DS_Store
+*.pyc

@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>مساعد شؤون الطلاب</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e4e7ec;
+  --accent: #2f5bd3; --accent-soft: #e8eefc;
+  --ok: #157a3c; --ok-soft: #e3f4ea; --bad: #b42318; --bad-soft: #fde8e7;
+  --warn: #9a5b00; --warn-soft: #fff1d6; --act: #6b3fd1; --act-soft: #efe9fc;
+  --code: #f2f4f7;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151b; --card: #1b1f27; --text: #e6e8ec; --muted: #98a2b3; --line: #2c323d;
+    --accent: #7c9cf5; --accent-soft: #23304f;
+    --ok: #5fd08a; --ok-soft: #173525; --bad: #ff8a80; --bad-soft: #3d1c1a;
+    --warn: #f4b860; --warn-soft: #3b2d14; --act: #b9a0ff; --act-soft: #2c2347;
+    --code: #232833;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.6 "Segoe UI", Tahoma, "Noto Sans Arabic", system-ui, sans-serif; }
+header { background: var(--card); border-bottom: 1px solid var(--line); padding: 12px 16px;
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 18px; margin: 0; }
+.chip { font-size: 12px; padding: 2px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.chip.warn { background: var(--warn-soft); color: var(--warn); }
+.tabs { display: flex; gap: 4px; margin-inline-start: auto; }
+.tabs button { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 8px;
+  cursor: pointer; font: inherit; }
+.tabs button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+.card h2 { font-size: 16px; margin: 0 0 12px; }
+label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+input[type=text], input[type=email], input[type=date], input[type=number], select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card); color: var(--text); font: inherit; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 6px; }
+.doc { border: 2px solid var(--line); border-radius: 10px; padding: 6px; cursor: pointer; font-size: 12px;
+  background: var(--card); text-align: center; position: relative; }
+.doc.on { border-color: var(--accent); background: var(--accent-soft); }
+.doc img { width: 100%; height: 90px; object-fit: contain; background: var(--code); border-radius: 6px; }
+.doc .grp { color: var(--muted); font-size: 11px; }
+.doc .n { direction: ltr; word-break: break-all; }
+.btn { border: 0; border-radius: 8px; padding: 10px 18px; font: inherit; cursor: pointer; background: var(--accent); color: #fff; font-weight: 600; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 400; padding: 6px 12px; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); font-size: 13px; }
+.preset-info { font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--code); margin-top: 8px; }
+.decision { font-size: 18px; font-weight: 700; padding: 4px 14px; border-radius: 8px; display: inline-block; }
+.d-approved { background: var(--ok-soft); color: var(--ok); }
+.d-rejected { background: var(--bad-soft); color: var(--bad); }
+.d-needs_review { background: var(--warn-soft); color: var(--warn); }
+.d-none { background: var(--code); color: var(--muted); }
+.timeline { display: flex; flex-direction: column; gap: 8px; }
+.step { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; border-inline-start: 4px solid var(--accent); }
+.step.tool { border-inline-start-color: var(--muted); }
+.step.act { border-inline-start-color: var(--act); background: var(--act-soft); }
+.step.err { border-inline-start-color: var(--bad); }
+.step .t { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.step .t b { font-size: 14px; }
+.step .meta { color: var(--muted); font-size: 12px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 10px; font-size: 13px; margin-top: 6px; }
+.kv span:nth-child(odd) { color: var(--muted); }
+pre { background: var(--code); border-radius: 8px; padding: 10px; overflow: auto; max-height: 340px; font-size: 12.5px;
+  white-space: pre-wrap; word-break: break-word; margin: 6px 0 0; }
+pre.ltr, .ltr { direction: ltr; text-align: left; unicode-bidi: plaintext; }
+details > summary { cursor: pointer; color: var(--accent); font-size: 13px; margin-top: 4px; }
+.effects .item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; }
+.flag { font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--bad-soft); color: var(--bad); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+.metric { background: var(--code); border-radius: 8px; padding: 8px 10px; }
+.metric .v { font-size: 18px; font-weight: 700; }
+.metric .l { font-size: 12px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: start; vertical-align: top; }
+tr.click { cursor: pointer; }
+tr.click:hover { background: var(--accent-soft); }
+.spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%;
+  display: inline-block; animation: spin 1s linear infinite; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hidden { display: none; }
+.err-box { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 10px; margin-top: 10px; }
+@media (max-width: 600px) { header h1 { font-size: 16px; } .tabs { margin-inline-start: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>مساعد شؤون الطلاب</h1>
+  <span class="chip warn">النسخة الأساسية · بدون حماية</span>
+  <span class="chip" id="modelChip">…</span>
+  <nav class="tabs">
+    <button id="tabNew" class="on">طلب جديد</button>
+    <button id="tabHist">السجل</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ NEW REQUEST ============ -->
+  <section id="viewNew">
+    <div class="card">
+      <h2>طلب جديد</h2>
+      <div class="grid">
+        <div>
+          <label for="preset">حالة جاهزة (اختياري)</label>
+          <select id="preset"><option value="">— بدون —</option></select>
+        </div>
+        <div>
+          <label for="service">الخدمة</label>
+          <select id="service">
+            <option value="transcript">كشف علامات</option>
+            <option value="graduation_notice">إشعار تخرج</option>
+            <option value="masters_registration">تسجيل ماجستير</option>
+          </select>
+        </div>
+        <div>
+          <label for="email">إيميل مقدّم الطلب (كما كتبه)</label>
+          <input id="email" type="email" class="ltr" value="nour.alsayed@example.com">
+        </div>
+        <div>
+          <label for="today">تاريخ اليوم (للإيجنت)</label>
+          <input id="today" type="date">
+        </div>
+        <div>
+          <label for="maxSteps">أقصى عدد خطوات</label>
+          <input id="maxSteps" type="number" min="1" max="50" value="10">
+        </div>
+      </div>
+      <div id="presetInfo" class="preset-info hidden"></div>
+
+      <label style="margin-top:14px">الوثائق: اختر من الوثائق الموجودة أو ارفع ملفات</label>
+      <div id="docs" class="docs"></div>
+      <div class="row" style="margin-top:10px">
+        <input id="files" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.gif">
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button id="runBtn" class="btn">تشغيل الإيجنت</button>
+        <span id="runStatus" class="muted"></span>
+      </div>
+      <div id="runError" class="err-box hidden"></div>
+    </div>
+    <div id="liveRun"></div>
+  </section>
+
+  <!-- ============ HISTORY ============ -->
+  <section id="viewHist" class="hidden">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <h2 style="margin:0">التشغيلات السابقة</h2>
+        <div class="row">
+          <button id="refreshBtn" class="btn ghost">تحديث</button>
+          <button id="resetBtn" class="btn ghost" title="يمسح الإيميلات والتسجيلات والإشعارات من قاعدة الحالة. السجل (traces) لا يُمسح.">مسح حالة الإيجنت</button>
+        </div>
+      </div>
+      <div style="overflow:auto; margin-top:10px"><table id="runsTable"></table></div>
+    </div>
+    <div id="histRun"></div>
+  </section>
+</main>
+
+<script>
+const SERVICE_AR = { transcript: "كشف علامات", masters_registration: "تسجيل ماجستير", graduation_notice: "إشعار تخرج" };
+const DECISION_AR = { approved: "موافقة", rejected: "رفض", needs_review: "تحويل للمراجعة" };
+const TOOL_AR = {
+  lookup_registry: "بحث في سجل", get_transcript: "جلب العلامات", register_masters: "تسجيل ماجستير",
+  issue_graduation_notice: "إصدار إشعار تخرج", send_email: "إرسال إيميل",
+};
+const ACTION_TOOLS = new Set(["register_masters", "issue_graduation_notice", "send_email"]);
+const STATUS_AR = { completed: "اكتمل", truncated: "انقطع (حد التوكنز)", hit_max_steps: "وصل لأقصى عدد خطوات", error: "خطأ", running: "يعمل" };
+let CONFIG = null;
+
+// ---------- tiny DOM helper (everything goes through textContent: no HTML injection) ----------
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+const $ = (id) => document.getElementById(id);
+const pretty = (v) => typeof v === "string" ? v : JSON.stringify(v, null, 2);
+const fmtS = (ms) => ms == null ? "-" : (ms / 1000).toFixed(1) + " ث";
+
+// ---------- tabs ----------
+function showTab(which) {
+  $("viewNew").classList.toggle("hidden", which !== "new");
+  $("viewHist").classList.toggle("hidden", which !== "hist");
+  $("tabNew").classList.toggle("on", which === "new");
+  $("tabHist").classList.toggle("on", which === "hist");
+  if (which === "hist") loadRuns();
+}
+$("tabNew").onclick = () => showTab("new");
+$("tabHist").onclick = () => showTab("hist");
+
+// ---------- init ----------
+async function init() {
+  CONFIG = await (await fetch("api/config")).json();
+  $("modelChip").textContent = CONFIG.model || "لا يوجد موديل";
+  $("modelChip").setAttribute("dir", "ltr");
+  $("today").value = CONFIG.today;
+  const sel = $("preset");
+  const groups = { valid: "حالات سليمة", defective: "حالات معيوبة", attack: "هجمات" };
+  for (const [cat, label] of Object.entries(groups)) {
+    const og = h("optgroup", { label });
+    for (const c of CONFIG.cases.filter(c => c.category === cat)) og.append(h("option", { value: c.id }, c.id));
+    if (og.children.length) sel.append(og);
+  }
+  const docs = $("docs");
+  for (const d of CONFIG.documents) {
+    const box = h("div", { class: "doc", "data-path": d.path, title: d.path },
+      h("img", { src: "api/preview?path=" + encodeURIComponent(d.path), alt: d.name, loading: "lazy" }),
+      h("div", { class: "n" }, d.name),
+      h("div", { class: "grp" }, d.group === "test documents" ? "وثيقة تجريبية" : "وثيقة تقييم"));
+    box.onclick = () => box.classList.toggle("on");
+    docs.append(box);
+  }
+}
+
+$("preset").onchange = () => {
+  const c = CONFIG.cases.find(c => c.id === $("preset").value);
+  const info = $("presetInfo");
+  if (!c) { info.classList.add("hidden"); return; }
+  $("service").value = c.service;
+  $("email").value = c.requester_email;
+  $("today").value = c.today;
+  document.querySelectorAll(".doc").forEach(b => b.classList.toggle("on", c.documents.includes(b.dataset.path)));
+  info.replaceChildren(
+    h("div", {}, h("b", {}, c.id + ": "), c.description),
+    h("div", {}, "القرار الصحيح: ", c.expected_decisions.map(d => DECISION_AR[d] || d).join(" أو ")),
+    c.attack ? h("div", {}, "هجوم: ", c.attack.channel, " ← الهدف: ", c.attack.goal, c.attack.attacker_email ? " (" + c.attack.attacker_email + ")" : "") : null);
+  info.classList.remove("hidden");
+};
+
+// ---------- run ----------
+let pollTimer = null;
+$("runBtn").onclick = async () => {
+  $("runError").classList.add("hidden");
+  const fd = new FormData();
+  fd.append("service", $("service").value);
+  fd.append("requester_email", $("email").value);
+  fd.append("today", $("today").value);
+  fd.append("max_steps", $("maxSteps").value);
+  document.querySelectorAll(".doc.on").forEach(b => fd.append("existing", b.dataset.path));
+  for (const f of $("files").files) fd.append("files", f);
+  $("runBtn").disabled = true;
+  const res = await fetch("api/run", { method: "POST", body: fd });
+  if (!res.ok) {
+    const msg = (await res.json().catch(() => ({}))).detail || res.statusText;
+    showError(res.status === 409 ? "في طلب شغّال حالياً، استنى يخلص." : msg);
+    $("runBtn").disabled = false;
+    return;
+  }
+  const { job_id } = await res.json();
+  startLive(job_id);
+};
+
+function showError(msg) { const e = $("runError"); e.textContent = msg; e.classList.remove("hidden"); }
+
+function startLive(jobId) {
+  const wrap = $("liveRun");
+  const timeline = h("div", { class: "timeline" });
+  const status = h("div", { class: "row" }, h("span", { class: "spinner" }), h("span", { id: "liveStatus" }, " الإيجنت عم يشتغل…"));
+  wrap.replaceChildren(h("div", { class: "card" }, h("h2", {}, "الخطوات (مباشر)"), status, h("div", { style: "margin-top:10px" }, timeline)));
+  let seen = 0;
+  const tick = async () => {
+    const r = await fetch(`api/jobs/${jobId}?since=${seen}`);
+    if (!r.ok) return;
+    const job = await r.json();
+    for (const s of job.steps) timeline.append(renderStep(s));
+    seen += job.steps.length;
+    $("runStatus").textContent = `${job.elapsed_s.toFixed(0)} ثانية`;
+    const ls = document.getElementById("liveStatus");
+    if (ls) ls.textContent = ` الإيجنت عم يشتغل… ${seen} خطوة، ${job.elapsed_s.toFixed(0)} ثانية`;
+    if (job.status === "running") { pollTimer = setTimeout(tick, 1500); return; }
+    $("runBtn").disabled = false;
+    if (job.status === "failed") {
+      wrap.replaceChildren(h("div", { class: "card" }, h("h2", {}, "فشل التشغيل"), h("pre", { class: "ltr" }, job.error + "\n\n" + (job.traceback || ""))));
+      return;
+    }
+    wrap.replaceChildren(renderRun(job.trace));
+    wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+  tick();
+}
+
+// ---------- rendering ----------
+function decisionBadge(t) {
+  const d = t.decision;
+  return h("span", { class: "decision d-" + (d || "none") }, d ? (DECISION_AR[d] || d) : "بدون قرار");
+}
+
+function renderStep(s) {
+  if (s.type === "model_call") {
+    const asked = (s.requested_tool_calls || []).map(c => TOOL_AR[c.name] || c.name);
+    const retry = (s.attempts || 1) > 1 ? ` · ${s.attempts - 1} إعادة محاولة` : "";
+    return h("div", { class: "step" },
+      h("div", { class: "t" }, h("b", {}, `${s.step}. 🧠 النموذج يفكّر`),
+        h("span", { class: "meta" }, `${s.input_tokens}→${s.output_tokens} توكن · ${fmtS(s.latency_ms)}${retry}`)),
+      asked.length ? h("div", {}, "طلب: ", h("b", {}, asked.join("، "))) : h("div", { class: "muted" }, "ما طلب أدوات (جواب نهائي)"),
+      s.reasoning_text ? h("details", {}, h("summary", {}, "شو فكّر"), h("pre", { class: "ltr" }, s.reasoning_text)) : null,
+      s.text ? h("details", {}, h("summary", {}, "النص يلي كتبه"), h("pre", { class: "ltr" }, s.text)) : null);
+  }
+  const act = ACTION_TOOLS.has(s.tool_name);
+  const args = s.tool_arguments && typeof s.tool_arguments === "object" ? s.tool_arguments : null;
+  return h("div", { class: "step tool" + (act ? " act" : "") + (s.tool_error ? " err" : "") },
+    h("div", { class: "t" }, h("b", {}, `${s.step}. 🔧 ${TOOL_AR[s.tool_name] || s.tool_name}`),
+      h("span", { class: "meta ltr" }, s.tool_name), act ? h("span", { class: "chip" }, "فعل بالعالم") : null),
+    args ? h("div", { class: "kv" }, Object.entries(args).flatMap(([k, v]) => [h("span", { class: "ltr" }, k), h("span", { dir: "auto" }, typeof v === "string" ? (v.length > 160 ? v.slice(0, 160) + "…" : v) : JSON.stringify(v))]))
+         : h("pre", { class: "ltr" }, s.tool_arguments_raw || ""),
+    s.tool_error ? h("div", { class: "err-box" }, s.tool_error) : null,
+    h("details", {}, h("summary", {}, "النتيجة"), h("pre", { class: "ltr" }, pretty(s.tool_result))));
+}
+
+function renderEffects(t) {
+  const se = t.side_effects || {}, rows = se.rows || {};
+  const req = (t.requester_email || "").trim().toLowerCase();
+  const items = [];
+  for (const m of rows.outbox || []) {
+    const diff = (m.to_address || "").trim().toLowerCase() !== req;
+    items.push(h("div", { class: "item" },
+      h("div", { class: "row" }, "📧 إيميل إلى ", h("b", { class: "ltr" }, m.to_address), diff ? h("span", { class: "flag" }, "مختلف عن إيميل مقدّم الطلب") : null),
+      h("div", { dir: "auto" }, "الموضوع: ", m.subject),
+      m.attachment_id ? h("div", { class: "muted ltr" }, "attachment: " + m.attachment_id) : null,
+      h("details", {}, h("summary", {}, "نص الإيميل"), h("pre", { dir: "auto" }, m.body))));
+  }
+  for (const r of rows.masters_registrations || [])
+    items.push(h("div", { class: "item" }, "🎓 تسجيل ماجستير: ", h("b", {}, r.full_name), " · ", r.major, " · ", h("span", { class: "ltr" }, r.national_number)));
+  for (const n of rows.graduation_notices || [])
+    items.push(h("div", { class: "item" }, "📄 إشعار تخرج: ", h("b", {}, n.full_name), " · ", n.major, " · تاريخ التخرج ", h("span", { class: "ltr" }, n.graduation_date), " · ",
+      h("a", { href: "api/artifact?path=" + encodeURIComponent(n.pdf_path), target: "_blank" }, "افتح PDF")));
+  return h("div", { class: "card effects" }, h("h2", {}, "شو صار فعلاً (الآثار)"),
+    items.length ? items : h("div", { class: "muted" }, "ولا شي: ما انبعت إيميل ولا انعمل تسجيل ولا إشعار."));
+}
+
+function renderRun(t) {
+  const fo = t.final_output && typeof t.final_output === "object" ? t.final_output : null;
+  const m = t.metrics || {};
+  const metric = (v, l) => h("div", { class: "metric" }, h("div", { class: "v" }, v), h("div", { class: "l" }, l));
+  return h("div", {},
+    h("div", { class: "card" },
+      h("div", { class: "row", style: "justify-content:space-between" },
+        h("div", { class: "row" }, decisionBadge(t), h("span", { class: "muted" }, STATUS_AR[t.status] || t.status),
+          t.parse_error ? h("span", { class: "flag" }, "الجواب النهائي مو JSON صالح") : null,
+          t.final_fenced ? h("span", { class: "chip" }, "كان الجواب جوّا علامات كود") : null),
+        h("span", { class: "muted ltr" }, (t.run_id || "").slice(0, 12))),
+      h("div", { class: "kv", style: "margin-top:10px" },
+        h("span", {}, "الخدمة"), h("span", {}, SERVICE_AR[t.service] || t.service),
+        h("span", {}, "مقدّم الطلب"), h("span", { class: "ltr" }, t.requester_email),
+        h("span", {}, "تاريخ اليوم"), h("span", { class: "ltr" }, (t.config || {}).today || "-"),
+        h("span", {}, "الموديل"), h("span", { class: "ltr" }, t.model),
+        h("span", {}, "الوقت"), h("span", {}, (t.timestamp || "").replace("T", " ").slice(0, 19))),
+      fo && fo.reason ? h("div", { style: "margin-top:10px" }, h("b", {}, "السبب: "), h("span", { dir: "auto" }, fo.reason)) : null,
+      t.error ? h("pre", { class: "ltr" }, t.error) : null,
+      fo ? h("details", {}, h("summary", {}, "الحقول المستخرجة والأفعال"), h("pre", { dir: "auto" }, pretty({ extracted_fields: fo.extracted_fields, actions_taken: fo.actions_taken }))) : null,
+      t.final_text_raw && !fo ? h("details", {}, h("summary", {}, "الجواب النهائي الخام"), h("pre", { class: "ltr" }, t.final_text_raw)) : null),
+    renderEffects(t),
+    h("div", { class: "card" }, h("h2", {}, "الأرقام"), h("div", { class: "metrics" },
+      metric(m.num_model_calls ?? "-", "استدعاءات النموذج"), metric(m.num_tool_calls ?? "-", "استدعاءات الأدوات"),
+      metric((m.total_tokens ?? 0).toLocaleString(), "توكنز"), metric((m.reasoning_tokens ?? 0).toLocaleString(), "منها تفكير"),
+      metric(fmtS(m.total_latency_ms), "الوقت الكلي"), metric(m.total_cost_usd == null ? "؟" : "$" + m.total_cost_usd.toFixed(4), "الكلفة"),
+      metric(m.num_retries ?? 0, "إعادات محاولة"))),
+    h("div", { class: "card" }, h("h2", {}, "الوثائق وشو وصل للنموذج منها"),
+      (t.documents || []).map((d, i) => h("details", {},
+        h("summary", {}, `الوثيقة ${i + 1}: `, h("span", { class: "ltr" }, (d.path || "").split("/").pop()), ` (${(d.pages || [{}])[0].text_source || "-"})`),
+        h("div", { class: "row", style: "align-items:flex-start; margin-top:6px" },
+          h("img", { src: "api/preview?path=" + encodeURIComponent(d.path), style: "max-width:220px; border-radius:8px; background:var(--code)", alt: "" }),
+          h("pre", { dir: "auto", style: "flex:1; min-width:240px" }, (d.pages || []).map(p => p.text).join("\n\n---\n\n") || "(ما في نص)"))))),
+    h("div", { class: "card" }, h("h2", {}, "الخطوات"), h("div", { class: "timeline" }, (t.steps || []).map(renderStep))));
+}
+
+// ---------- history ----------
+async function loadRuns() {
+  const runs = await (await fetch("api/runs")).json();
+  const tbl = $("runsTable");
+  tbl.replaceChildren(h("tr", {}, ["الوقت", "الخدمة", "القرار", "الحالة", "الآثار", "الموديل", "الوقت المستغرق"].map(x => h("th", {}, x))));
+  for (const r of runs) {
+    const se = r.side_effects || {};
+    const eff = [se.outbox ? `📧${se.outbox}` : "", se.masters_registrations ? `🎓${se.masters_registrations}` : "", se.graduation_notices ? `📄${se.graduation_notices}` : ""].filter(Boolean).join(" ") || "—";
+    const tr = h("tr", { class: "click" },
+      h("td", { class: "ltr" }, r.timestamp.replace("T", " ").slice(0, 16)),
+      h("td", {}, SERVICE_AR[r.service] || r.service),
+      h("td", {}, decisionBadge(r)),
+      h("td", { class: "muted" }, STATUS_AR[r.status] || r.status),
+      h("td", {}, eff),
+      h("td", { class: "ltr muted" }, (r.model || "").split("/").pop()),
+      h("td", {}, r.latency_s.toFixed(0) + " ث"));
+    tr.onclick = async () => {
+      const t = await (await fetch("api/runs/" + r.run_id)).json();
+      $("histRun").replaceChildren(renderRun(t));
+      $("histRun").scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    tbl.append(tr);
+  }
+}
+$("refreshBtn").onclick = loadRuns;
+$("resetBtn").onclick = async () => {
+  if (!confirm("بدك تمسح الإيميلات والتسجيلات والإشعارات من قاعدة حالة الإيجنت؟ (السجل بيضل)")) return;
+  const r = await fetch("api/reset_state", { method: "POST" });
+  alert(r.ok ? "تم المسح" : "ما زبط: في طلب شغّال");
+};
+
+init();
+</script>
+</body>
+</html>
