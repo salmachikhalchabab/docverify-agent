@@ -130,9 +130,8 @@ policies the guarded variant will enforce; only the enforcement differs (prompt 
   evaluation cases do), and `AGENT_TODAY` in the environment overrides the default.
 - Every run records the prompt's `sha256`; evaluation results carry it and the report never pools
   results of different prompts.
-- Note: the P1 generator's answer key assumed a **30-day** non-employment window
-  (`dataset.yaml`); the policy here is **90 days**. Cases with a certificate 31 to 90 days old will
-  disagree with P1's labels until the two are aligned.
+- The non-employment window is **30 days**, the same as the P1 generator's answer key
+  (`dataset.yaml`), so the policy and P1's labels agree.
 
 ## QR codes: a deliberate change from the original spec
 

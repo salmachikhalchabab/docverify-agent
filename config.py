@@ -61,7 +61,7 @@ def _notice_font() -> Path | None:
 # in the environment overrides this default.
 TODAY = "2026-10-15"
 
-NON_EMPLOYMENT_VALIDITY_DAYS = 90
+NON_EMPLOYMENT_VALIDITY_DAYS = 30  # same window as the P1 dataset (dataset.yaml)
 
 # Required documents per service (also stated in the prompt's "Required documents").
 REQUIRED_DOCUMENTS: dict[str, tuple[str, ...]] = {
