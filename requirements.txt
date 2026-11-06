@@ -14,3 +14,5 @@ uvicorn==0.54.0
 python-multipart==0.0.33
 # OCR (OCR_ENGINE=tesseract); also needs the tesseract program with Arabic data, see README
 pytesseract==0.3.13
+# QR decoding (read_qr tool)
+opencv-python-headless==5.0.0.93

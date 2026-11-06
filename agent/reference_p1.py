@@ -106,6 +106,16 @@ P1_LAYOUT = SQLiteLayout(
                 "c.council_decision_date, s.national_id AS holder_national_number, s.full_name_ar AS holder_name "
                 "FROM certificates c JOIN students s ON s.id = c.student_id WHERE c.serial = ?",
         ),
+        "qr_tokens": RegistrySpec(
+            "certificates", "qr_token",
+            "The registry record behind a document's QR code: which document it is (serial, kind, issue date), "
+            "whether it is revoked, how many times its QR was already used, and its holder. "
+            "Key: the token, i.e. the last part of the QR URL after /verify/.",
+            sql="SELECT c.serial, c.document_kind, c.issued_at, c.revoked, c.qr_used_count, "
+                "s.national_id AS holder_national_number, s.full_name_ar AS holder_name, s.faculty, "
+                "s.specialization, s.gpa, s.graduation_date "
+                "FROM certificates c JOIN students s ON s.id = c.student_id WHERE c.qr_token = ?",
+        ),
         "masters_accepted": RegistrySpec(
             "master_accepted", "national_id",
             "Master's admission list: the program a person was accepted to and their status "

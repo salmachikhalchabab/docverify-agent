@@ -294,7 +294,7 @@ const SERVICES = [
 const SERVICE_AR = Object.fromEntries(SERVICES.map(s => [s.id, s.name]));
 const DECISION_AR = { approved: "موافقة", rejected: "رفض", needs_review: "تحويل للمراجعة" };
 const TOOL_AR = { lookup_registry: "بحث في سجل", get_transcript: "جلب العلامات", register_masters: "تسجيل ماجستير",
-  issue_graduation_notice: "إصدار إشعار تخرج", send_email: "إرسال إيميل" };
+  issue_graduation_notice: "إصدار إشعار تخرج", send_email: "إرسال إيميل", read_qr: "قراءة QR" };
 const ACTION_TOOLS = new Set(["register_masters", "issue_graduation_notice", "send_email"]);
 const STATUS_AR = { completed: "اكتمل", truncated: "انقطع (حد التوكنز)", hit_max_steps: "وصل لأقصى عدد خطوات", error: "خطأ", running: "يعمل" };
 const DATA_AR = { p1_sqlite: "سجل P1", mock_sqlite: "السجل التجريبي (نور)" };

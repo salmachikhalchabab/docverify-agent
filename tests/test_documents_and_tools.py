@@ -65,7 +65,7 @@ def test_unsupported_type(tmp_path):
 def test_schemas_take_registry_names_from_data_layer(stores):
     ref, _ = stores
     schemas = {s["function"]["name"]: s for s in build_tool_schemas(ref)}
-    assert set(schemas) == {"lookup_registry", "get_transcript", "register_masters", "issue_graduation_notice", "send_email"}
+    assert set(schemas) == {"lookup_registry", "get_transcript", "register_masters", "issue_graduation_notice", "send_email", "read_qr"}
     assert schemas["lookup_registry"]["function"]["parameters"]["properties"]["registry"]["enum"] == ["fake_people"]
 
 

@@ -130,6 +130,7 @@ def run_agent(
         ]
         trace.documents = [d.summary() for d in docs]
         docs = guardrails.transform_documents(docs)
+        ctx.documents = docs
 
         run_loop(
             trace=trace,

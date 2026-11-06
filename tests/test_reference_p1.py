@@ -94,3 +94,64 @@ def test_working_copy_is_closed_before_rename(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "replace", checked_replace)
     ensure_p1_db(SNAPSHOT, tmp_path / "registry_agent.sqlite")
     assert seen == [0]
+
+
+def _qr_document(tmp_path, text):
+    """A test page with a QR code encoding `text` (fixture only)."""
+    import cv2
+    import numpy as np
+    from agent.documents import load_document
+    qr = cv2.QRCodeEncoder.create().encode(text)
+    qr = cv2.resize(qr, None, fx=6, fy=6, interpolation=cv2.INTER_NEAREST)
+    page = np.full((900, 700), 255, np.uint8)
+    page[500:500 + qr.shape[0], 420:420 + qr.shape[1]] = qr
+    p = tmp_path / "certificate.png"
+    cv2.imwrite(str(p), page)
+    return load_document(p)
+
+
+def test_read_qr_then_registry_lookup_by_token(store, tmp_path):
+    import json
+    from agent.datastore import SQLiteStateStore
+    from agent.sqlite_util import session
+    from agent.tools import ToolContext, execute_tool
+    with session(lambda: sqlite3.connect(store.path)) as c:
+        token, serial, holder = c.execute(
+            "SELECT c.qr_token, c.serial, s.national_id FROM certificates c JOIN students s ON s.id = c.student_id "
+            "LIMIT 1").fetchone()
+    url = f"http://localhost:8001/verify/{token}"
+    ctx = ToolContext("r1", store, SQLiteStateStore(tmp_path / "s.sqlite"), tmp_path,
+                      documents=[_qr_document(tmp_path, url)])
+
+    out = execute_tool(ctx, "read_qr", json.dumps({"document_number": 1}))
+    assert out.error is None and out.result["found"] is True and out.result["codes"] == [url]
+
+    rec = execute_tool(ctx, "lookup_registry", json.dumps({"registry": "qr_tokens", "key": token})).result
+    assert rec["found"] and rec["record"]["serial"] == serial and rec["record"]["holder_national_number"] == holder
+    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    assert execute_tool(ctx, "lookup_registry", json.dumps({"registry": "qr_tokens", "key": tampered})).result["found"] is False
+
+
+def test_read_qr_bad_document_number_is_an_error_result(store, tmp_path):
+    import json
+    from agent.datastore import SQLiteStateStore
+    from agent.tools import ToolContext, execute_tool
+    ctx = ToolContext("r1", store, SQLiteStateStore(tmp_path / "s.sqlite"), tmp_path)
+    assert "no document" in execute_tool(ctx, "read_qr", json.dumps({"document_number": 3})).result["error"]
+
+
+def test_read_qr_inside_a_run_sees_the_uploaded_documents(store, tmp_path, settings, make_llm):
+    import json
+    from agent.datastore import SQLiteStateStore
+    from agent.run import run_agent
+    from tests.fakes import ScriptedCompletion, text_reply, tool_reply
+    doc = _qr_document(tmp_path, "http://localhost:8001/verify/abc")
+    completion = ScriptedCompletion([
+        tool_reply(("read_qr", {"document_number": 1})),
+        text_reply(json.dumps({"decision": "needs_review", "reason": "", "extracted_fields": {}, "actions_taken": []})),
+    ])
+    r = run_agent("graduation_notice", "x@student.example", [doc.path], "baseline", settings=settings,
+                  llm=make_llm(completion), reference_store=store, state_store=SQLiteStateStore(tmp_path / "st.sqlite"))
+    qr_step = next(s for s in r.trace.steps if s.tool_name == "read_qr")
+    assert qr_step.tool_result["codes"] == ["http://localhost:8001/verify/abc"]
+    assert "read_qr" in {t["function"]["name"] for t in completion.calls[0]["tools"]}

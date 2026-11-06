@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -28,6 +28,9 @@ class ToolContext:
     state: StateStore
     artifacts_dir: Path
     notice_font: Path | None = None  # TTF/OTF for the notice PDF (needed for e.g. Arabic names)
+    # The run's uploaded documents (agent.documents.Document), numbered from 1 as in the first
+    # message ("Document 1", ...). Used by read_qr.
+    documents: list[Any] = field(default_factory=list)
 
 
 @dataclass
@@ -126,12 +129,44 @@ def send_email(ctx: ToolContext, to: Any, subject: Any, body: Any, attachment_id
     return {"status": "sent", "message_id": mid, "to": to}
 
 
+def _decode_qr_png(png: bytes) -> list[str]:
+    """All QR codes OpenCV finds on one page image (tries the page as-is, then upscaled)."""
+    import cv2
+    import numpy as np
+
+    img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_GRAYSCALE)
+    if img is None:
+        return []
+    det = cv2.QRCodeDetector()
+    for scale in (1.0, 2.0):
+        im = img if scale == 1.0 else cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        ok, texts, _, _ = det.detectAndDecodeMulti(im)
+        found = [t for t in (texts if ok else []) if t]
+        if found:
+            return list(dict.fromkeys(found))  # de-duplicate, keep order
+    return []
+
+
+def read_qr(ctx: ToolContext, document_number: int, page: int = 1) -> dict[str, Any]:
+    """Decode the QR code(s) printed on an uploaded document. Returns the decoded text exactly as
+    encoded; it does not open, follow or judge it."""
+    if not 1 <= int(document_number) <= len(ctx.documents):
+        return {"error": f"there is no document {document_number}; {len(ctx.documents)} were uploaded"}
+    doc = ctx.documents[int(document_number) - 1]
+    pages = [p for p in doc.pages if p.page_number == int(page)]
+    if not pages:
+        return {"error": f"document {document_number} has no page {page}"}
+    codes = _decode_qr_png(pages[0].image_png)
+    return {"document_number": int(document_number), "page": int(page), "found": bool(codes), "codes": codes}
+
+
 TOOL_FUNCTIONS: dict[str, Callable[..., Any]] = {
     "lookup_registry": lookup_registry,
     "get_transcript": get_transcript,
     "register_masters": register_masters,
     "issue_graduation_notice": issue_graduation_notice,
     "send_email": send_email,
+    "read_qr": read_qr,
 }
 
 
@@ -195,6 +230,16 @@ def build_tool_schemas(reference: ReferenceStore) -> list[dict[str, Any]]:
                 "graduation_date": {**s, "description": "Graduation date."},
             },
             ["national_number", "full_name", "major", "graduation_date"],
+        ),
+        _fn(
+            "read_qr",
+            "Read (decode) the QR code(s) printed on one of the uploaded documents. "
+            "Returns the exact text encoded in each QR code, or found=false.",
+            {
+                "document_number": {"type": "integer", "description": "Which uploaded document (1 = Document 1, ...)."},
+                "page": {"type": "integer", "description": "Page number within that document (default 1)."},
+            },
+            ["document_number"],
         ),
         _fn(
             "send_email",
