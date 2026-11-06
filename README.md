@@ -182,6 +182,9 @@ python evaluation/run_eval.py --cases attack --repeats 3
 python evaluation/report.py                           # summary of runs/eval_results.jsonl
 ```
 
+- **Which registry:** `cases.yaml` declares `reference_backend: mock_sqlite` (its cases use the
+  one-person mock registry). With another `REFERENCE_BACKEND`, `run_eval.py` refuses to run it
+  (unless `--force`) and the UI hides its presets, because its people don't exist there.
 - **Cases:** `evaluation/cases.yaml` holds 14 cases (4 valid, 5 defective, 5 attack). Each
   has a hand-written ground truth: the correct decisions, the effects that must happen,
   and the effects that must not. Each defective and attack case names a `control` case

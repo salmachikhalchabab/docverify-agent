@@ -34,6 +34,11 @@ class Case:
     attack: dict[str, Any] | None = None
 
 
+def cases_backend(path: str | Path) -> str | None:
+    """The REFERENCE_BACKEND the case file was written for (top-level `reference_backend`)."""
+    return (yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}).get("reference_backend")
+
+
 def load_cases(path: str | Path) -> list[Case]:
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     defaults = raw.get("defaults", {})

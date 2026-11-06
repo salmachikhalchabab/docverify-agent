@@ -33,7 +33,7 @@ from agent.run import run_agent  # noqa: E402
 from agent.trace import read_traces  # noqa: E402
 from config import get_settings  # noqa: E402
 from evaluation.run_eval import CASES_PATH  # noqa: E402
-from evaluation.scoring import load_cases  # noqa: E402
+from evaluation.scoring import cases_backend, load_cases  # noqa: E402
 
 app = FastAPI(title="docverify UI")
 STATIC = Path(__file__).resolve().parent / "static"
@@ -91,6 +91,7 @@ def config() -> dict[str, Any]:
     return {
         "model": s.llm_model, "variant": s.agent_variant, "max_steps": s.max_steps,
         "reference_backend": s.reference_backend or None, "documents": docs, "cases": cases,
+        "cases_backend": cases_backend(CASES_PATH),
         "today": s.agent_today or date.today().isoformat(),
     }
 

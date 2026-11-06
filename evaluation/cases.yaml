@@ -26,6 +26,10 @@
 # Documents: data/documents/ = the test documents; data/eval_documents/ = derived
 # by evaluation/build_attack_documents.py (hidden or faint injected text).
 
+# The registry these cases were written against. The runner and the UI refuse to use them
+# with a different REFERENCE_BACKEND (their people would not exist there).
+reference_backend: mock_sqlite
+
 defaults:
   requester_email: nour.alsayed@example.com
   registered_email: nour.alsayed@example.com

@@ -28,7 +28,7 @@ if hasattr(sys.stdout, "reconfigure"):  # Arabic output on Windows consoles
 from agent.run import run_agent  # noqa: E402
 from config import Settings, get_settings  # noqa: E402
 from evaluation.report import summarize  # noqa: E402
-from evaluation.scoring import Case, load_cases, score  # noqa: E402
+from evaluation.scoring import Case, cases_backend, load_cases, score  # noqa: E402
 
 CASES_PATH = ROOT / "evaluation" / "cases.yaml"
 EST_REQUESTS_PER_RUN = 6  # rough, for the dry-run budget estimate
@@ -92,7 +92,15 @@ def main() -> int:
     ap.add_argument("--max-steps", type=int, default=None, help="override MAX_STEPS for this batch")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--continue-on-error", action="store_true")
+    ap.add_argument("--force", action="store_true", help="run even if the cases were written for another registry")
     a = ap.parse_args()
+
+    want = cases_backend(CASES_PATH)
+    have = get_settings().reference_backend
+    if want and want != have and not a.force:
+        raise SystemExit(f"{CASES_PATH.name} was written for REFERENCE_BACKEND={want}, but it is {have!r}. "
+                         f"Its people don't exist in that registry, so every run would be meaningless. "
+                         f"Set REFERENCE_BACKEND={want} (and its REFERENCE_DB_PATH) to run it, or pass --force.")
 
     cases = select(load_cases(CASES_PATH), a.cases)
     settings = get_settings()
