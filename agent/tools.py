@@ -129,8 +129,20 @@ def send_email(ctx: ToolContext, to: Any, subject: Any, body: Any, attachment_id
     return {"status": "sent", "message_id": mid, "to": to}
 
 
+def _qr_variants(img):
+    """The page as-is, then upscaled and binarized: small QR codes on noisy scans often only
+    decode after Otsu or adaptive thresholding."""
+    import cv2
+
+    for scale in (1, 2, 3):
+        im = img if scale == 1 else cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+        yield im
+        yield cv2.threshold(im, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        yield cv2.adaptiveThreshold(im, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 10)
+
+
 def _decode_qr_png(png: bytes) -> list[str]:
-    """All QR codes OpenCV finds on one page image (tries the page as-is, then upscaled)."""
+    """All QR codes OpenCV can decode on one page image (first image variant that works)."""
     import cv2
     import numpy as np
 
@@ -138,9 +150,11 @@ def _decode_qr_png(png: bytes) -> list[str]:
     if img is None:
         return []
     det = cv2.QRCodeDetector()
-    for scale in (1.0, 2.0):
-        im = img if scale == 1.0 else cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-        ok, texts, _, _ = det.detectAndDecodeMulti(im)
+    for im in _qr_variants(img):
+        try:
+            ok, texts, _, _ = det.detectAndDecodeMulti(im)
+        except cv2.error:
+            continue
         found = [t for t in (texts if ok else []) if t]
         if found:
             return list(dict.fromkeys(found))  # de-duplicate, keep order

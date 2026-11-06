@@ -147,3 +147,19 @@ def test_sqlite_reference_store_is_read_only_and_follows_layout(tmp_path):
             c.execute("DELETE FROM people")
     finally:
         c.close()
+
+
+def test_read_qr_decodes_a_small_blurry_scanned_qr():
+    """Like the P1 scans: a ~90 px QR, blurred and JPEG-compressed, on an off-white page."""
+    import cv2
+    import numpy as np
+    from agent.tools import _decode_qr_png
+    url = "http://localhost:8001/verify/MjIwMTQyN3wwMTY5OTMzNDA1OXwwODI0YzE1NzhlMjY1YzQwfDEzYmVm"
+    qr = cv2.QRCodeEncoder.create().encode(url)
+    qr = cv2.resize(qr, (90, 90), interpolation=cv2.INTER_AREA)
+    page = np.full((1300, 900), 235, np.uint8)
+    page[1080:1170, 30:120] = qr
+    page = cv2.GaussianBlur(page, (3, 3), 0.8)
+    ok, jpg = cv2.imencode(".jpg", page, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    png = cv2.imencode(".png", cv2.imdecode(jpg, cv2.IMREAD_GRAYSCALE))[1].tobytes()
+    assert _decode_qr_png(png) == [url]
