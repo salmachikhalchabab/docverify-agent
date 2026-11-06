@@ -78,6 +78,8 @@ def run_agent(
     guardrails = spec.guardrails_factory()
     system_prompt = get_prompt(spec.prompt_key)
 
+    if today is None and settings.agent_today:
+        today = date.fromisoformat(settings.agent_today)
     today_str = (today or datetime.now(timezone.utc).date()).isoformat()
     run_id = uuid.uuid4().hex
     t0 = time.perf_counter()

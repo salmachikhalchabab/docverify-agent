@@ -8,6 +8,7 @@ its own layout spec, not new code.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,11 @@ class RegistrySpec:
     table: str
     key_column: str
     description: str  # shown to the model in the lookup_registry tool schema
+    # Optional: a SELECT with exactly one "?" (the key), for registries that join tables.
+    # When set, it replaces `SELECT * FROM table WHERE key_column = ?`.
+    sql: str | None = None
+    # Columns that hold a JSON value (e.g. json_group_array) and are decoded before returning.
+    json_columns: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -50,9 +56,16 @@ class SQLiteReferenceStore:
         spec = self.layout.registries.get(registry)
         if spec is None:
             raise UnknownRegistryError(registry)
+        query = spec.sql or f'SELECT * FROM "{spec.table}" WHERE "{spec.key_column}" = ?'
         with self._conn() as c:
-            row = c.execute(f'SELECT * FROM "{spec.table}" WHERE "{spec.key_column}" = ?', (key,)).fetchone()
-        return dict(row) if row else None
+            row = c.execute(query, (key,)).fetchone()
+        if not row:
+            return None
+        rec = dict(row)
+        for col in spec.json_columns:
+            if isinstance(rec.get(col), str):
+                rec[col] = json.loads(rec[col])
+        return rec
 
     def get_transcript(self, student_id: str) -> dict[str, Any] | None:
         with self._conn() as c:

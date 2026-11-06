@@ -37,7 +37,8 @@ from evaluation.scoring import load_cases  # noqa: E402
 
 app = FastAPI(title="docverify UI")
 STATIC = Path(__file__).resolve().parent / "static"
-DOC_DIRS = {"test documents": ROOT / "data" / "documents", "evaluation documents": ROOT / "data" / "eval_documents"}
+DOC_DIRS = {"p1 documents": ROOT / "data" / "p1" / "docs", "test documents": ROOT / "data" / "documents",
+            "evaluation documents": ROOT / "data" / "eval_documents"}
 ALLOWED_SUFFIXES = PDF_SUFFIXES | IMAGE_SUFFIXES
 
 JOBS: dict[str, dict[str, Any]] = {}
@@ -90,7 +91,7 @@ def config() -> dict[str, Any]:
     return {
         "model": s.llm_model, "variant": s.agent_variant, "max_steps": s.max_steps,
         "reference_backend": s.reference_backend or None, "documents": docs, "cases": cases,
-        "today": date.today().isoformat(),
+        "today": s.agent_today or date.today().isoformat(),
     }
 
 

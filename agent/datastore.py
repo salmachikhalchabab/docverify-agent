@@ -93,6 +93,15 @@ def get_reference_store(backend: str, db_path: Path | None = None) -> ReferenceS
         if db_path is None:
             raise DataNotConfiguredError("REFERENCE_DB_PATH is not set")
         return SQLiteReferenceStore(db_path, MOCK_LAYOUT)
+    if backend == "p1_sqlite":  # P1 synthetic registry, see agent/reference_p1.py
+        from agent.reference_p1 import P1_LAYOUT, ensure_p1_db
+        from agent.reference_sqlite import SQLiteReferenceStore
+
+        if db_path is None:
+            raise DataNotConfiguredError("REFERENCE_DB_PATH is not set")
+        # The working copy is built from the untouched P1 snapshot next to it, on first use.
+        ensure_p1_db(db_path.parent / "registry.snapshot.db", db_path)
+        return SQLiteReferenceStore(db_path, P1_LAYOUT)
     raise DataNotConfiguredError(f"Unknown REFERENCE_BACKEND {backend!r}. {UnconfiguredReferenceStore.MESSAGE}")
 
 

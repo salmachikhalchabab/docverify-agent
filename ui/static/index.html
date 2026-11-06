@@ -224,7 +224,7 @@ async function init() {
     const box = h("div", { class: "doc", "data-path": d.path, title: d.path },
       h("img", { src: "api/preview?path=" + encodeURIComponent(d.path), alt: d.name, loading: "lazy" }),
       h("div", { class: "n" }, d.name),
-      h("div", { class: "grp" }, d.group === "test documents" ? "وثيقة تجريبية" : "وثيقة تقييم"));
+      h("div", { class: "grp" }, { "p1 documents": "وثيقة P1", "test documents": "وثيقة تجريبية" }[d.group] || "وثيقة تقييم"));
     box.onclick = () => box.classList.toggle("on");
     docs.append(box);
   }

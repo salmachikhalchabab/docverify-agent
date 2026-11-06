@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 *.pyc
+data/p1/registry_agent.sqlite
+data/p1/*.tmp

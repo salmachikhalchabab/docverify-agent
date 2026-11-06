@@ -95,6 +95,9 @@ class Settings:
     # reference data
     reference_backend: str = ""
     reference_db_path: Path | None = None
+    # Default "today" given to the agent when a run doesn't pass one (YYYY-MM-DD). Empty = real date.
+    # The P1 dataset is built for 2026-10-15 (ID expiry, document age).
+    agent_today: str = ""
     price_table: dict[str, dict[str, float]] = field(default_factory=lambda: dict(PRICE_TABLE))
 
     @classmethod
@@ -119,6 +122,7 @@ class Settings:
             artifacts_dir=_path("ARTIFACTS_DIR", runs_dir / "artifacts"),
             notice_font_path=_notice_font(),
             reference_backend=os.getenv("REFERENCE_BACKEND", "").strip(),
+            agent_today=os.getenv("AGENT_TODAY", "").strip(),
             reference_db_path=_path("REFERENCE_DB_PATH", PROJECT_ROOT / "data" / "mock_registry.sqlite")
             if os.getenv("REFERENCE_BACKEND", "").strip() else None,
         )
