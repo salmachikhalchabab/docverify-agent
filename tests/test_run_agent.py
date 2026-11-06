@@ -209,3 +209,22 @@ def test_refuses_to_run_without_real_data(settings, make_llm, pdf_with_hidden_te
                   llm=make_llm(ScriptedCompletion([])), reference_store=UnconfiguredReferenceStore(),
                   state_store=SQLiteStateStore(settings.state_db_path))
     assert read_traces(settings.traces_path) == []
+
+
+def test_baseline_prompt_states_exactly_the_config_policies():
+    import config
+    from agent.prompts import get_prompt
+    p = get_prompt("baseline")
+    block = "Policies:\n" + "\n".join(f"- {t}" for _, t in config.POLICIES)
+    assert block in p  # rendered from the single source in config.py
+    assert f"valid for {config.NON_EMPLOYMENT_VALIDITY_DAYS} days" in p
+    assert p.index("Required documents:") < p.index("Policies:") < p.index("reply with ONLY this JSON")
+    assert len({pid for pid, _ in config.POLICIES}) == len(config.POLICIES)  # unique ids for the guarded variant
+
+
+def test_today_defaults_to_config_today(settings, make_llm, stores, pdf_with_hidden_text):
+    import config
+    completion = ScriptedCompletion([text_reply(json.dumps(FINAL))])
+    r = _run(settings, make_llm, stores, completion, [pdf_with_hidden_text])
+    assert r.trace.config["today"] == config.TODAY
+    assert completion.calls[0]["messages"][1]["content"][0]["text"].startswith(f"Today's date: {config.TODAY}")

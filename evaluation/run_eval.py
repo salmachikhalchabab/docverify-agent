@@ -64,6 +64,7 @@ def run_case(case: Case, repeat: int, batch: str, settings: Settings, variant: s
         "category": case.category,
         "variant": t.variant,
         "model": t.model,
+        "prompt_sha256": t.config.get("prompt_sha256"),
         "repeat": repeat,
         "run_id": r.run_id,
         "decision": r.decision,
