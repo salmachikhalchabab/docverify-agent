@@ -149,6 +149,7 @@ keys or QR secret). The agent's prompt, tools and output are unchanged.
   (`agent/reference_p1.py`). The snapshot itself is never modified.
 - The working copy adds one table P1 doesn't have: `registered_emails`, a deterministic,
   fictional address per person (`first.last.<last 3 digits of the national number>@student.example`).
+  The full list is in `data/p1/registered_emails.csv` (regenerate with `python data/p1/export_emails.py`).
 - Registries offered to the model: `civil_registry`, `registered_emails`, `students`,
   `employment_registry`, `graduates`, `graduation_documents` (by serial) and `masters_accepted`.
   `get_transcript` takes the student number from `students`.
