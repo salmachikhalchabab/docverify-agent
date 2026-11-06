@@ -29,7 +29,8 @@ def test_registered_email_format():
 
 
 def test_every_person_has_a_unique_registered_email(store):
-    with sqlite3.connect(store.path) as c:
+    from agent.sqlite_util import session
+    with session(lambda: sqlite3.connect(store.path)) as c:
         n_students = c.execute("SELECT count(*) FROM students").fetchone()[0]
         emails = [r[0] for r in c.execute("SELECT email FROM registered_emails")]
     assert len(emails) == n_students == len(set(emails))
@@ -58,5 +59,38 @@ def test_transcript_by_student_number(store):
 
 
 def test_store_is_read_only(store):
-    with pytest.raises(sqlite3.OperationalError):
-        store._conn().execute("DELETE FROM students")
+    c = store._conn()
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            c.execute("DELETE FROM students")
+    finally:
+        c.close()
+
+
+def _open_handles(path: Path) -> int:
+    """How many file descriptors of this process point at `path` (Linux /proc)."""
+    fd_dir = Path("/proc/self/fd")
+    n = 0
+    for fd in fd_dir.iterdir():
+        try:
+            if Path(fd.readlink()) == path.resolve():
+                n += 1
+        except OSError:
+            pass
+    return n
+
+
+@pytest.mark.skipif(not Path("/proc/self/fd").exists(), reason="needs /proc (Linux)")
+def test_working_copy_is_closed_before_rename(tmp_path, monkeypatch):
+    """On Windows a file with an open SQLite connection can't be renamed (WinError 32).
+    Check, at the moment of the rename, that no connection to the file is still open."""
+    seen = []
+    real_replace = Path.replace
+
+    def checked_replace(self, target):
+        seen.append(_open_handles(Path(self)))
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", checked_replace)
+    ensure_p1_db(SNAPSHOT, tmp_path / "registry_agent.sqlite")
+    assert seen == [0]

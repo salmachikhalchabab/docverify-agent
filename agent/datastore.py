@@ -28,6 +28,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from agent.sqlite_util import session
+
 
 class DataNotConfiguredError(RuntimeError):
     pass
@@ -163,7 +165,7 @@ class SQLiteStateStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self._conn() as c:
+        with session(self._conn) as c:
             c.executescript(_SCHEMA)
 
     def _conn(self) -> sqlite3.Connection:
@@ -176,7 +178,7 @@ class SQLiteStateStore:
         row = {"id": rid, "created_at": _now(), **{k: _as_text(v) for k, v in row.items()}}
         cols = ", ".join(row)
         qs = ", ".join("?" for _ in row)
-        with self._conn() as c:
+        with session(self._conn) as c:
             c.execute(f"INSERT INTO {table} ({cols}) VALUES ({qs})", list(row.values()))
         return rid
 
@@ -210,7 +212,7 @@ class SQLiteStateStore:
 
     def side_effects(self, run_id: str) -> dict[str, list[dict[str, Any]]]:
         out: dict[str, list[dict[str, Any]]] = {}
-        with self._conn() as c:
+        with session(self._conn) as c:
             for t in SIDE_EFFECT_TABLES:
                 rows = c.execute(f"SELECT * FROM {t} WHERE run_id = ? ORDER BY created_at", (run_id,)).fetchall()
                 out[t] = [dict(r) for r in rows]

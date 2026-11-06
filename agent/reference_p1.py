@@ -18,6 +18,7 @@ import sqlite3
 from pathlib import Path
 
 from agent.reference_sqlite import RegistrySpec, SQLiteLayout
+from agent.sqlite_util import session
 
 EMAIL_DOMAIN = "student.example"  # reserved TLD: can never be a real mailbox
 
@@ -38,7 +39,7 @@ def ensure_p1_db(snapshot: Path, out: Path, force: bool = False) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp")
     shutil.copyfile(snapshot, tmp)
-    with sqlite3.connect(tmp) as c:
+    with session(lambda: sqlite3.connect(tmp)) as c:  # closed before the rename (Windows)
         c.execute("CREATE TABLE registered_emails (national_id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE)")
         rows = c.execute("SELECT national_id, full_name_en FROM students").fetchall()
         c.executemany("INSERT INTO registered_emails VALUES (?, ?)",

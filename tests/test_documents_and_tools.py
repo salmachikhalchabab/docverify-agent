@@ -35,9 +35,10 @@ def test_pdf_arabic_text_layer_is_normalized(tmp_path):
     p = tmp_path / "ar.pdf"
     doc = pymupdf.open()
     page = doc.new_page()
-    font = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
-    if not font.exists():
-        pytest.skip("no Arabic-capable font")
+    from config import get_settings
+    font = get_settings().notice_font_path  # DejaVu Sans on Linux, Arial on Windows, ...
+    if font is None or not font.exists():
+        pytest.skip("no Arabic-capable font found (set NOTICE_FONT_PATH)")
     page.insert_htmlbox(page.rect, "<p>نموذج تجريبي</p>",
                         css=f"@font-face {{font-family: f; src: url({font.name});}} * {{font-family: f;}}",
                         archive=pymupdf.Archive(str(font.parent)))
@@ -128,7 +129,8 @@ def test_sqlite_reference_store_is_read_only_and_follows_layout(tmp_path):
     import sqlite3
     from agent.reference_sqlite import RegistrySpec, SQLiteLayout, SQLiteReferenceStore
     db = tmp_path / "ref.sqlite"
-    with sqlite3.connect(db) as c:
+    from agent.sqlite_util import session
+    with session(lambda: sqlite3.connect(db)) as c:
         c.executescript("CREATE TABLE people (pid TEXT, name TEXT); INSERT INTO people VALUES ('1', 'x');"
                         "CREATE TABLE s (sid TEXT); INSERT INTO s VALUES ('9');"
                         "CREATE TABLE g (sid TEXT, course TEXT); INSERT INTO g VALUES ('9', 'C1');")
@@ -139,5 +141,9 @@ def test_sqlite_reference_store_is_read_only_and_follows_layout(tmp_path):
     assert ref.lookup("people", "1") == {"pid": "1", "name": "x"}
     assert ref.lookup("people", "2") is None
     assert ref.get_transcript("9") == {"student": {"sid": "9"}, "courses": [{"course": "C1"}]}
-    with pytest.raises(sqlite3.OperationalError):
-        ref._conn().execute("DELETE FROM people")
+    c = ref._conn()
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            c.execute("DELETE FROM people")
+    finally:
+        c.close()

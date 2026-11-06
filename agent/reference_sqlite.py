@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from agent.datastore import DataNotConfiguredError, UnknownRegistryError
+from agent.sqlite_util import session
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,7 @@ class SQLiteReferenceStore:
         if spec is None:
             raise UnknownRegistryError(registry)
         query = spec.sql or f'SELECT * FROM "{spec.table}" WHERE "{spec.key_column}" = ?'
-        with self._conn() as c:
+        with session(self._conn) as c:
             row = c.execute(query, (key,)).fetchone()
         if not row:
             return None
@@ -68,7 +69,7 @@ class SQLiteReferenceStore:
         return rec
 
     def get_transcript(self, student_id: str) -> dict[str, Any] | None:
-        with self._conn() as c:
+        with session(self._conn) as c:
             student = c.execute(self.layout.student_sql, (student_id,)).fetchone()
             if student is None:
                 return None

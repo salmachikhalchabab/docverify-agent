@@ -109,7 +109,8 @@ ROWS = {
 
 def main() -> None:
     OUT.unlink(missing_ok=True)
-    with sqlite3.connect(OUT) as c:
+    from contextlib import closing
+    with closing(sqlite3.connect(OUT)) as c, c:
         c.executescript(SCHEMA)
         for table, rows in ROWS.items():
             qs = ",".join("?" * len(rows[0]))
