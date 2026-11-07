@@ -228,3 +228,10 @@ def test_today_defaults_to_config_today(settings, make_llm, stores, pdf_with_hid
     r = _run(settings, make_llm, stores, completion, [pdf_with_hidden_text])
     assert r.trace.config["today"] == config.TODAY
     assert completion.calls[0]["messages"][1]["content"][0]["text"].startswith(f"Today's date: {config.TODAY}")
+
+
+def test_qr_policy_uses_the_configured_registry_prefix():
+    import config
+    from agent.prompts import get_prompt
+    assert dict(config.POLICIES)["qr_verified"].count(config.QR_VERIFY_PREFIX) == 1
+    assert config.QR_VERIFY_PREFIX in get_prompt("baseline")
