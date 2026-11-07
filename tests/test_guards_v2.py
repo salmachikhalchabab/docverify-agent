@@ -366,6 +366,24 @@ def test_ui_version_switch_picks_the_variant_of_each_run(tmp_path, monkeypatch):
     assert run(variant="guarded").status_code == 200 and seen[-1]["variant"] == "baseline"
 
 
+def test_ui_gallery_shows_sample_documents_only_with_the_mock_registry(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    monkeypatch.setenv("RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.delenv("UI_SAMPLE_DOCS", raising=False)
+    import ui.app as ui
+    monkeypatch.setattr(ui, "AUTH_ON", False)
+    c = TestClient(ui.app)
+
+    def groups(backend):
+        monkeypatch.setenv("REFERENCE_BACKEND", backend)
+        return {d["group"] for d in c.get("/api/config").json()["documents"]}
+
+    assert {"test documents", "evaluation documents"} <= groups("mock_sqlite")
+    assert not groups("p1_sqlite") & ui.SAMPLE_GROUPS
+    monkeypatch.setenv("UI_SAMPLE_DOCS", "on")
+    assert {"test documents", "evaluation documents"} <= groups("p1_sqlite")
+
+
 # ---------------------------------------------------------------- trace file safety
 
 

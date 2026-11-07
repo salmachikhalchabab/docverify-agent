@@ -526,7 +526,8 @@ function renderGallery() {
     el.onclick = () => { selected.has(d.path) ? selected.delete(d.path) : selected.add(d.path); el.classList.toggle("on"); updateCount(); };
     return el;
   }));
-  if (!docs.length) $("gallery").append(h("div", { class: "muted", style: "grid-column:1/-1; padding:12px; font-size:13px" }, "ما في وثائق مطابقة."));
+  if (!docs.length) $("gallery").append(h("div", { class: "muted", style: "grid-column:1/-1; padding:12px; font-size:13px" },
+    q ? "ما في وثائق مطابقة." : "ما في وثائق جاهزة. ارفع الوثائق من تحت."));
 }
 function updateCount() {
   const n = selected.size + $("files").files.length;

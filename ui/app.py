@@ -56,6 +56,9 @@ app = FastAPI(title="docverify UI")
 STATIC = Path(__file__).resolve().parent / "static"
 DOC_DIRS = {"p1 documents": ROOT / "data" / "p1" / "docs", "test documents": ROOT / "data" / "documents",
             "evaluation documents": ROOT / "data" / "eval_documents"}
+# The test and evaluation documents belong to the small mock registry (Nour, Layla): the gallery shows
+# them only with that registry (or UI_SAMPLE_DOCS=on). With the P1 registry it shows P1 documents only.
+SAMPLE_GROUPS = {"test documents", "evaluation documents"}
 ALLOWED_SUFFIXES = PDF_SUFFIXES | IMAGE_SUFFIXES
 MAX_UPLOADS = 5
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
@@ -245,7 +248,10 @@ def config(request: Request) -> dict[str, Any]:
     user = _require(request)
     s = _settings()
     docs = []
+    show_samples = s.reference_backend == "mock_sqlite" or os.getenv("UI_SAMPLE_DOCS", "").strip().lower() == "on"
     for group, d in DOC_DIRS.items():
+        if group in SAMPLE_GROUPS and not show_samples:
+            continue
         for f in sorted(d.glob("*")) if d.exists() else []:
             if f.suffix.lower() in ALLOWED_SUFFIXES:
                 docs.append({"group": group, "name": f.name, "path": f.relative_to(ROOT).as_posix()})

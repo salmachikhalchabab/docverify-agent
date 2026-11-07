@@ -192,7 +192,8 @@ keys or QR secret).
   `employment_registry`, `graduates`, `graduation_documents` (by serial) and `masters_accepted`.
   `get_transcript` takes the student number from `students`.
 - The P1 data is built for **2026-10-15** (ID expiry, document age), which is `config.TODAY`.
-- P1 document images go in `data/p1/docs/`; the UI lists them automatically.
+- P1 document images go in `data/p1/docs/` (git-ignored); the UI lists them automatically. The test and
+  evaluation sample documents are listed only with the mock registry (`UI_SAMPLE_DOCS=on`: always).
 
 ## Temporary mock registry (smoke tests only)
 

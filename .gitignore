@@ -12,3 +12,5 @@ data/p1/*.tmp
 labels.db
 **/labels.db
 data/p1/eval/
+# P1 document images (copied from the P1 project for the UI gallery)
+data/p1/docs/
