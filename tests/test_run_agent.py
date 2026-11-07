@@ -237,3 +237,18 @@ def test_qr_policy_uses_the_configured_registry_prefix():
     from agent.prompts import get_prompt
     assert dict(config.POLICIES)["qr_verified"].count(config.QR_VERIFY_PREFIX) == 1
     assert config.QR_VERIFY_PREFIX in get_prompt("baseline")
+
+
+def test_every_policy_is_enforced_by_a_guard_in_code():
+    """The prompt states config.POLICIES; the guarded variant must enforce each of them in code."""
+    import re
+    import config
+    from pathlib import Path
+    ids = [pid for pid, _ in config.POLICIES]
+    assert set(config.POLICY_ENFORCED_BY) == set(ids), "every policy needs an entry, and nothing else"
+    src = (Path(__file__).resolve().parent.parent / "agent" / "guards.py").read_text(encoding="utf-8")
+    used = set(re.findall(r'"(G\d+)"', src)) | ({"policy"} if '"policy")' in src else set())
+    for pid in ids:
+        enforcers = config.POLICY_ENFORCED_BY[pid]
+        assert enforcers, f"{pid} is stated in the prompt but nothing in code enforces it"
+        assert set(enforcers) <= used, f"{pid}: {set(enforcers) - used} not found in agent/guards.py"
