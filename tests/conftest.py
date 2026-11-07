@@ -15,6 +15,17 @@ from tests.fakes import FAKE_MODEL, FakeReferenceStore  # noqa: E402
 TEST_PRICES = {FAKE_MODEL: {"input_per_mtok": 3.0, "output_per_mtok": 15.0}}
 
 
+@pytest.fixture(autouse=True)
+def _no_real_langfuse(monkeypatch):
+    """Tests never send anything to a real Langfuse project, even when .env has the keys
+    (config loads .env into the environment). tests/test_observability.py sets its own fake keys
+    and an in-memory exporter."""
+    from agent import observability
+    for k in ("LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY", "LANGFUSE_TRACING"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(observability, "_client", None)
+
+
 @pytest.fixture
 def settings(tmp_path):
     runs = tmp_path / "runs"
