@@ -16,3 +16,6 @@ python-multipart==0.0.33
 pytesseract==0.3.13
 # QR decoding (read_qr tool)
 opencv-python-headless==5.0.0.93
+# Optional observability (agent/observability.py). Pinned: the exporter uses SDK internals
+# for exact step times; tests/test_observability.py fails if a new version changes them.
+langfuse==5.2.0

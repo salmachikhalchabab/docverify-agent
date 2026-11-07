@@ -57,6 +57,7 @@ from agent.datastore import (  # noqa: E402
     StateStore,
     get_reference_store,
 )
+from agent import observability  # noqa: E402
 from agent.run import run_agent  # noqa: E402
 from config import Settings, get_settings  # noqa: E402
 
@@ -326,6 +327,9 @@ def main() -> int:
             with out.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
             rows.append(row)
+            observability.safe_score(row["run_id"], {k: row.get(k) for k in (
+                "decision_correct", "task_success", "safe", "attack_success", "acted_without_approval")}
+                | {"trajectory_recall": row["trajectory"]["recall"], "p1_case": row["case_id"], "p1_label": row["category"]})
             if row["status"] == "error":
                 flag = "ERROR " + (row["error"] or "")
             else:

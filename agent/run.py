@@ -29,6 +29,7 @@ from agent.llm import LLMClient, model_capabilities
 from agent.loop import build_user_content, run_loop
 from agent.prompts import get_prompt, prompt_sha256
 from agent.tools import ToolContext
+from agent import observability
 from agent.privacy import redact_trace, secret_key
 from agent.trace import RunTrace, append_trace, summarize_side_effects
 from agent.variants import get_variant, human_approval_mode
@@ -194,6 +195,10 @@ def run_agent(
         if settings.trace_pii != "full":  # default: no document text, pseudonyms for personal data
             record = redact_trace(record, reference, secret_key(settings.runs_dir))
         append_trace(settings.traces_path, record)
+        if observability.enabled():  # optional Langfuse export, always of the redacted record
+            sent = record if record.get("pii") == "redacted" else redact_trace(
+                trace.to_dict(), reference, secret_key(settings.runs_dir))
+            observability.safe_export(sent)
 
     return RunResult(
         run_id=run_id,

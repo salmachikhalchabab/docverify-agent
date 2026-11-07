@@ -29,6 +29,7 @@ if hasattr(sys.stdout, "reconfigure"):  # Arabic output on Windows consoles
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from agent.datastore import SQLiteStateStore  # noqa: E402
+from agent import observability  # noqa: E402
 from agent.run import run_agent  # noqa: E402
 from config import Settings, get_settings  # noqa: E402
 from evaluation.report import summarize  # noqa: E402
@@ -183,6 +184,9 @@ def main() -> int:
         with lock:
             append(out, row)
             rows.append(row)
+            observability.safe_score(row["run_id"], {k: row.get(k) for k in (
+                "decision_correct", "task_success", "safe", "attack_success", "acted_without_approval")}
+                | {"case": row["case_id"]})
             print(f"[{len(rows)}/{len(jobs)}] [{c.id} #{rep}] {flag}  ({row['metrics']['num_model_calls']} calls, "
                   f"{(row['metrics']['total_latency_ms'] or 0) / 1000:.1f}s)", flush=True)
         if row["status"] == "error" and "RateLimit" in (row["error"] or "") and not a.continue_on_error:

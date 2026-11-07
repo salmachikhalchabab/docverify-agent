@@ -254,6 +254,23 @@ python evaluation/report.py --file runs/p1_results.jsonl     # the comparison re
   one. P1's expected tool trajectory is mapped onto this agent's tools and reported as a share.
 - Work on `--split dev`; keep `test` for the final measurement.
 
+## Langfuse (optional observability)
+
+Set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` in `.env` (and `LANGFUSE_BASE_URL` for the US
+region). Every run is then also sent to Langfuse Cloud; nothing changes in the agent.
+
+- One Langfuse trace per run: the run (agent), each model call (generation: model, tokens incl.
+  reasoning, cost) and each tool call (arguments, result; errors as ERROR, guardrail refusals as
+  WARNING), with each step's real start and end time. Tags: variant, model, service, status,
+  decision, prompt hash.
+- **Only the redacted trace is sent** (pseudonyms, no document text), even with `TRACE_PII=full`.
+- The evaluation scripts attach their results as scores (`decision_correct`, `safe`,
+  `attack_success`, `task_success`, `trajectory_recall`, ...). The trace id comes from the run id,
+  so a run and its scores always meet.
+- Earlier runs: `python evaluation/langfuse_backfill.py` sends `runs/traces.jsonl` with the scores
+  from the result files, once each (`runs/.langfuse_exported`).
+- Exporting never breaks a run: errors are logged and the run continues.
+
 ## Connecting the real data
 
 1. Implement a `ReferenceStore` in `agent/datastore.py` with `registries()`,
