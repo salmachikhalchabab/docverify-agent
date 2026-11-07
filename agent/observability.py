@@ -2,6 +2,7 @@
 
 Enabled when LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are set (and LANGFUSE_TRACING is not "off").
 LANGFUSE_BASE_URL picks the region (default https://cloud.langfuse.com; US: https://us.cloud.langfuse.com).
+LANGFUSE_TIMEOUT (seconds, default 30) is how long each request to Langfuse may take.
 
 What is sent: the trace as saved, i.e. REDACTED (pseudonyms, no document text; see agent/privacy.py),
 even when TRACE_PII=full is used locally. One Langfuse trace per run:
@@ -50,6 +51,8 @@ def client() -> Any:
             secret_key=os.getenv("LANGFUSE_SECRET_KEY", "").strip(),
             base_url=(os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST") or "https://cloud.langfuse.com").strip(),
             environment=os.getenv("LANGFUSE_ENVIRONMENT", "docverify").strip() or None,
+            # the SDK default (5 s) is too short for slow connections: the TLS handshake alone can exceed it
+            timeout=int(os.getenv("LANGFUSE_TIMEOUT") or 30),
         )
         atexit.register(flush)
     return _client
