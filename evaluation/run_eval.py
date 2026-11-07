@@ -108,6 +108,11 @@ def run_case(case: Case, repeat: int, batch: str, settings: Settings, variant: s
         "repeat": repeat,
         "run_id": r.run_id,
         "decision": r.decision,
+        # the agent's own decision, before code changed it (with code guardrails the final one is the rules')
+        "model_decision": (t.guard_summary or {}).get("model_decision") if t.guard_summary else r.decision,
+        "model_decision_correct": ((t.guard_summary or {}).get("model_decision") if t.guard_summary else r.decision)
+                                  in case.expected_decisions,
+        "overridden_by_rules": bool(m.get("decision_overridden")),
         "status": t.status,
         "parse_error": t.parse_error,
         "hit_max_steps": t.hit_max_steps,
@@ -142,7 +147,7 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=1, help="runs at the same time (mind the provider's rate limit)")
     ap.add_argument("--human-approval", default="off", choices=["off", "actions", "flagged"],
                     help="only for guarded_human: 'flagged' sends only warning cases to staff. Which variants wait for "
-                         "staff is decided by the variant key (prompt_only_human, guarded_human). Nobody approves "
+                         "staff is decided by the variant key (baseline_human, prompt_only_human, guarded_human). Nobody approves "
                          "during an evaluation: waiting actions are not performed.")
     a = ap.parse_args()
 

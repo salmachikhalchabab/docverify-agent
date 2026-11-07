@@ -4,7 +4,8 @@
 #   powershell -ExecutionPolicy Bypass -File start_website.ps1 -Variant prompt_only_human -Port 8001
 #   powershell -ExecutionPolicy Bypass -File start_website.ps1 -Mock                 # small registry (Nour, Layla)
 #
-# Versions (keys): baseline, prompt_only, guarded, prompt_only_human, guarded_human
+# Versions (keys): baseline, prompt_only, tools_only, guarded, baseline_human, prompt_only_human, guarded_human
+#   (the page header also has a version switch; -Variant is the one it starts on)
 #   *_human = every action (email, registration, notice) waits for a staff member
 # Students: http://127.0.0.1:<port>/     Staff: http://127.0.0.1:<port>/staff
 param(

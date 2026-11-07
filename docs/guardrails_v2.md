@@ -77,12 +77,13 @@ Each version has a key. The key alone says how a run was made, and it is saved w
 |---|---|---|---|
 | `baseline` | your friend's prompt and rules | no | no |
 | `prompt_only` | the same + extra security sentences | no | no |
-| `guarded` | your friend's prompt + a note on the guardrails' messages | yes | no |
+| `tools_only` | your friend's prompt + a note on refusals | action checks only (no document checks) | no |
+| `guarded` | your friend's prompt + a note on the data markers and on refusals | yes | no |
+| `baseline_human` | same as `baseline` | no | every action waits for staff |
 | `prompt_only_human` | same as `prompt_only` | no | every action waits for staff |
 | `guarded_human` | same as `guarded` | yes | every action waits for staff (`HUMAN_APPROVAL=flagged`: only warning cases) |
 
-(`tools_only` also exists: action checks only, no document checks.)
 
 Website: set `$env:AGENT_VARIANT` in `start_website.ps1`. Evaluation: `--variant <key>`.
-In an evaluation nobody approves, so waiting actions are not performed; a simulated reviewer
-is still to be decided.
+In an evaluation nobody approves; `evaluation/p1_eval.py` uses a simulated reviewer
+(`--reviewer careful|rubber_stamp`, see `evaluation/simulated_reviewer.py`).

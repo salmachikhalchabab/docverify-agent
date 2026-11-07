@@ -86,7 +86,7 @@ def run_agent(
     today_str = (today or date.fromisoformat(settings.agent_today)).isoformat()
     run_id = uuid.uuid4().hex
     # The guardrails object sees the request and the stores. The baseline ignores all of it.
-    # who approves actions: decided by the variant (prompt_only_human, guarded_human), not by .env
+    # who approves actions: decided by the variant (*_human), not by .env
     approval = human_approval_mode(spec, settings.human_approval)
     guardrails = spec.guardrails_factory(
         service=service,

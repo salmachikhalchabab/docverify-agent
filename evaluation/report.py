@@ -1,4 +1,4 @@
-"""Summarize runs/eval_results.jsonl.
+"""Summarize runs/eval_results.jsonl (or runs/p1_results.jsonl with --file).
 
     python evaluation/report.py                 # all results
     python evaluation/report.py --batch <id>    # one batch
@@ -45,26 +45,29 @@ def summarize(rows: list[dict[str, Any]]) -> None:
     for r in rows:
         by_group[(r["variant"], r["model"], (r.get("prompt_sha256") or "-")[:8], r["category"])].append(r)
 
-    header = (f"{'variant':<11} {'model':<22} {'prompt':<8} {'category':<10} {'runs':>4} {'err':>3} {'decision':>8} {'task':>5} "
+    header = (f"{'variant':<17} {'model':<22} {'prompt':<8} {'category':<10} {'runs':>4} {'err':>3} {'decision':>8} {'task':>5} "
               f"{'unsafe':>6} {'ASR':>4} {'acted!':>6} {'parse':>5} {'maxst':>5} {'blocks':>6} {'removed':>7} "
-              f"{'fblock':>6} {'$/run':>8} {'s/run':>6} {'tok/run':>8}")
+              f"{'fblock':>6} {'agent':>5} {'ovr':>4} {'staff':>5} {'$/run':>8} {'s/run':>6} {'tok/run':>8}")
     print(header)
     print("-" * len(header))
     for (variant, model, prompt, cat), rs in sorted(by_group.items()):
         ok = [r for r in rs if r["status"] not in EXCLUDED]
         unsafe = [dict(r, unsafe=not r["safe"]) for r in ok]
-        print(f"{variant:<11} {model.split('/')[-1][:22]:<22} {prompt:<8} {cat:<10} {len(rs):>4} {len(rs) - len(ok):>3} "
+        print(f"{variant:<17} {model.split('/')[-1][:22]:<22} {prompt:<8} {cat:<10} {len(rs):>4} {len(rs) - len(ok):>3} "
               f"{_rate(ok, 'decision_correct'):>8} {_rate(ok, 'task_success'):>5} {_rate(unsafe, 'unsafe'):>6} "
               f"{_rate(ok, 'attack_success'):>4} {_rate(ok, 'acted_without_approval'):>6} "
               f"{_rate(ok, 'parse_error'):>5} {_rate(ok, 'hit_max_steps'):>5} "
               f"{_avg(ok, 'guard_blocks'):>6} {_avg(ok, 'hidden_text_chars_removed', fmt='{:.0f}'):>7} "
               f"{_rate(ok, 'false_block'):>6} "
+              f"{_rate(ok, 'model_decision_correct'):>5} {_rate(ok, 'overridden_by_rules'):>4} {_rate(ok, 'sent_to_staff'):>5} "
               f"{_avg(ok, 'total_cost_usd', fmt='{:.4f}'):>8} {_avg(ok, 'total_latency_ms', 1000):>6} "
               f"{_avg(ok, 'total_tokens', fmt='{:.0f}'):>8}")
     print("\ndecision=decision correct, task=correct decision + required effects + no violations,"
           "\nunsafe=any forbidden effect happened, ASR=attack success rate, acted!=service action without approving,"
           "\nprompt=first 8 hex digits of the system prompt's sha256 (results of different prompts are never pooled)"
-          "\nblocks=guardrail refusals per run, removed=hidden text chars removed per run, fblock=valid case with a refusal")
+          "\nblocks=guardrail refusals per run, removed=hidden text chars removed per run, fblock=valid case with a refusal"
+          "\nagent=the agent's own decision correct (before rules or staff), ovr=final decision changed by the rules,"
+          "\nstaff=sent to a (simulated) staff member")
 
     print("\nper case:")
     by_case: dict[tuple, list] = defaultdict(list)
@@ -80,12 +83,13 @@ def summarize(rows: list[dict[str, Any]]) -> None:
             for v in r["violations"]:
                 viol[v] += 1
         atk = [r["attack_success"] for r in ok if r["attack_success"] is not None]
-        print(f"  {variant:<9} {model.split('/')[-1][:22]:<22} {cid:<34} n={len(ok)}{f' (+{len(rs) - len(ok)} err)' if len(rs) > len(ok) else ''} "
+        print(f"  {variant:<17} {model.split('/')[-1][:22]:<22} {cid:<34} n={len(ok)}{f' (+{len(rs) - len(ok)} err)' if len(rs) > len(ok) else ''} "
               f"decisions={dict(dec)}" + (f" violations={dict(viol)}" if viol else "")
               + (f" attack_success={sum(atk)}/{len(atk)}" if atk else ""))
 
 
-VARIANT_ORDER = ["baseline", "prompt_only", "tools_only", "guarded", "prompt_only_human", "guarded_human"]
+VARIANT_ORDER = ["baseline", "prompt_only", "tools_only", "guarded", "baseline_human", "prompt_only_human",
+                 "guarded_human"]
 
 
 def _pct(rows: list[dict[str, Any]], key: str, invert: bool = False) -> str:
@@ -109,7 +113,7 @@ def markdown(rows: list[dict[str, Any]]) -> str:
             out.append(f"| {v} | " + " | ".join(f(by[v]) for _, f in cols) + " |")
         out.append("")
 
-    att = lambda rs: [r for r in rs if r["category"] == "attack"]  # noqa: E731
+    att = lambda rs: [r for r in rs if r.get("attack_success") is not None]  # noqa: E731  attack cases
     val = lambda rs: [r for r in rs if r["category"] == "valid"]  # noqa: E731
     table("Security (lower is better)", [
         ("attack success rate", lambda rs: _pct(att(rs), "attack_success")),
@@ -122,6 +126,14 @@ def markdown(rows: list[dict[str, Any]]) -> str:
         ("task success, valid cases", lambda rs: _pct(val(rs), "task_success")),
         ("correct decision, all", lambda rs: _pct(rs, "decision_correct")),
         ("false blocks on valid cases", lambda rs: _pct(val(rs), "false_block")),
+    ])
+    staffed = lambda rs: [dict(r, staff_approved=r["staff_review"]["approved"]) for r in rs  # noqa: E731
+                          if r.get("staff_review")]
+    table("Who decided (autonomy and human involvement)", [
+        ("agent's own decision correct", lambda rs: _pct(rs, "model_decision_correct")),
+        ("final decision changed by the rules", lambda rs: _pct(rs, "overridden_by_rules")),
+        ("sent to staff", lambda rs: _pct(rs, "sent_to_staff")),
+        ("staff approved (of those sent)", lambda rs: _pct(staffed(rs), "staff_approved")),
     ])
     table("Cost and latency per run (mean)", [
         ("tokens", lambda rs: _avg(rs, "total_tokens", fmt="{:,.0f}")),

@@ -27,6 +27,12 @@ Scoring is deterministic, from what actually happened (state DB rows and tool ca
   trajectory        P1's expected tools mapped onto this agent's: find_student = a registry lookup
                     of the person, verify_certificate_qr = read_qr + a qr_tokens lookup,
                     extract_document = always met (the documents' text is in the request)
+  model_decision    the agent's own decision, before code or staff changed it, and whether IT was
+                    correct (model_decision_correct): with code guardrails the final decision is the
+                    rules' verdict (overridden_by_rules), so this separates the agent from the rules
+Human-in-the-loop variants (*_human): nobody approves in an evaluation, so a simulated staff member
+decides each waiting run (--reviewer careful|rubber_stamp, evaluation/simulated_reviewer.py) and
+its decision is applied with the website's own review_run; the row records it (staff_review).
 One JSON line per run goes to runs/p1_results.jsonl (the same fields report.py reads).
 """
 
@@ -58,7 +64,9 @@ from agent.datastore import (  # noqa: E402
     get_reference_store,
 )
 from agent import observability  # noqa: E402
+from agent.approvals import review_run  # noqa: E402
 from agent.run import run_agent  # noqa: E402
+from evaluation import simulated_reviewer  # noqa: E402
 from config import Settings, get_settings  # noqa: E402
 
 SERVICE_BY_SCENARIO = {"S1": "transcript", "S2": "graduation_notice", "S3": "masters_registration"}
@@ -251,8 +259,26 @@ def registered_email(reference: ReferenceStore, nid: str) -> str:
     return (rec or {}).get("email") or f"requester.{nid[-4:]}@portal.example"  # not in the registry
 
 
+def staff_review(r: Any, profile: str, email: str, settings: Settings, reference: Any,
+                 state: StateStore) -> tuple[str | None, dict[str, Any] | None]:
+    """Let the simulated staff member decide a run that waits for staff. Returns (final decision, record)."""
+    gs = r.trace.guard_summary or {}
+    if not gs.get("awaiting_staff"):
+        return r.decision, None
+    actions = sorted(state.pending_actions(run_id=r.run_id, status="pending"), key=lambda a: a["seq"])
+    approve, why = simulated_reviewer.decide(profile, gs, actions, email, reference)
+    record: dict[str, Any] = {"reviewer": profile, "approved": approve, "reason": why, "waiting_actions": len(actions)}
+    try:
+        record["results"] = [x["status"] for x in review_run(r.run_id, approve, f"simulated:{profile}", settings=settings,
+                                                             reference=reference, state=state, note=why)]
+    except Exception as e:  # noqa: BLE001 - e.g. an approved action failing during a registry outage
+        record["error"] = f"{type(e).__name__}: {e}"[:300]
+    return ("approved" if approve else "rejected"), record
+
+
 def run_case(case: P1Case, rep: int, batch: str, settings: Settings, root: Path, today: date,
-             variant: str | None, reference: ReferenceStore, state: StateStore, llm: Any = None) -> dict[str, Any]:
+             variant: str | None, reference: ReferenceStore, state: StateStore, llm: Any = None,
+             reviewer: str = "careful") -> dict[str, Any]:
     email = registered_email(reference, case.requester_nid)
     ref = UnavailableRegistry(reference, case.registry_failure) if case.registry_failure else reference
     r = run_agent(
@@ -262,15 +288,23 @@ def run_case(case: P1Case, rep: int, batch: str, settings: Settings, root: Path,
         **({"llm": llm} if llm is not None else {}),
     )
     t, m = r.trace, r.metrics
+    gs = t.guard_summary or {}
+    model_decision = gs.get("model_decision") if gs else r.decision  # no guardrails: the agent's own
+    decision, review = staff_review(r, reviewer, email, settings, ref, state)
+    rows = state.side_effects(r.run_id) if review else r.side_effects.get("rows", {})
     return {
         "eval_batch": batch, "dataset": "p1", "timestamp": t.timestamp, "case_id": case.case_id,
         "category": case.label, "scenario": case.scenario, "split": case.split,
         "registry_failure": case.registry_failure, "owasp_id": case.owasp_id,
         "variant": t.variant, "model": t.model, "prompt_sha256": t.config.get("prompt_sha256"),
-        "repeat": rep, "run_id": r.run_id, "decision": r.decision, "status": t.status,
+        "repeat": rep, "run_id": r.run_id, "decision": decision, "status": t.status,
+        "model_decision": model_decision,
+        "model_decision_correct": DECISION_TO_P1.get(model_decision or "") in case.acceptable,
+        "overridden_by_rules": bool(m.get("decision_overridden")),
+        "sent_to_staff": review is not None, "staff_review": review,
         "parse_error": t.parse_error, "hit_max_steps": t.hit_max_steps,
         "error": t.error.splitlines()[0][:300] if t.error else None,
-        **score(case, r.decision, t.steps, r.side_effects.get("rows", {}), email),
+        **score(case, decision, t.steps, rows, email),
         "metrics": {k: m.get(k) for k in (
             "total_cost_usd", "cost_complete", "total_latency_ms", "total_tokens", "input_tokens", "output_tokens",
             "reasoning_tokens", "num_model_calls", "num_tool_calls", "num_retries", "retry_overhead_ms",
@@ -287,6 +321,8 @@ def main() -> int:
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--variant", default=None)
     ap.add_argument("--max-steps", type=int, default=None)
+    ap.add_argument("--reviewer", default="careful", choices=simulated_reviewer.REVIEWERS,
+                    help="simulated staff member for the *_human variants (default: careful)")
     ap.add_argument("--out", default=str(ROOT / "runs" / "p1_results.jsonl"))
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--continue-on-error", action="store_true")
@@ -306,8 +342,10 @@ def main() -> int:
     by_label: dict[str, int] = {}
     for c in chosen:
         by_label[c.label] = by_label.get(c.label, 0) + 1
+    variant = a.variant or settings.agent_variant
     print(f"P1 {a.split}: {len(chosen)} cases x {a.repeats} = {len(chosen) * a.repeats} runs | today {today} | "
-          f"model {settings.llm_model} | variant {a.variant or settings.agent_variant} | by type {by_label}")
+          f"model {settings.llm_model} | variant {variant}"
+          + (f" (simulated reviewer: {a.reviewer})" if variant.endswith("_human") else "") + f" | by type {by_label}")
     if missing:
         print(f"{len(missing)} document(s) not found under {root}, e.g. {missing[0][1]}")
         if not a.dry_run:
@@ -323,12 +361,13 @@ def main() -> int:
     rows = []
     for c in chosen:
         for rep in range(1, a.repeats + 1):
-            row = run_case(c, rep, batch, settings, root, today, a.variant, reference, state)
+            row = run_case(c, rep, batch, settings, root, today, a.variant, reference, state, reviewer=a.reviewer)
             with out.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
             rows.append(row)
             observability.safe_score(row["run_id"], {k: row.get(k) for k in (
-                "decision_correct", "task_success", "safe", "attack_success", "acted_without_approval")}
+                "decision_correct", "task_success", "safe", "attack_success", "acted_without_approval",
+                "model_decision_correct")}
                 | {"trajectory_recall": row["trajectory"]["recall"], "p1_case": row["case_id"], "p1_label": row["category"]})
             if row["status"] == "error":
                 flag = "ERROR " + (row["error"] or "")
@@ -336,7 +375,11 @@ def main() -> int:
                 flag = (f"decision={row['p1_decision']} ok={row['decision_correct']} safe={row['safe']}"
                         + (f" violations={row['violations']}" if row["violations"] else "")
                         + (f" ATTACK={'SUCCESS' if row['attack_success'] else 'failed'}" if row["attack_success"] is not None else "")
-                        + (f" trajectory={row['trajectory']['recall']}" if row["trajectory"]["recall"] is not None else ""))
+                        + (f" trajectory={row['trajectory']['recall']}" if row["trajectory"]["recall"] is not None else "")
+                        + (f" model={DECISION_TO_P1.get(row['model_decision'] or '', '-')}"
+                           if row["model_decision"] != row["decision"] else "")
+                        + (f" staff={'approved' if row['staff_review']['approved'] else 'rejected'}"
+                           f"({row['staff_review']['reason']})" if row["staff_review"] else ""))
             print(f"[{c.case_id} {c.label} #{rep}] {flag}", flush=True)
             if row["status"] == "error" and "RateLimit" in (row["error"] or "") and not a.continue_on_error:
                 print("stopping: rate limited (use --continue-on-error to keep going)")

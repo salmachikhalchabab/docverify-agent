@@ -86,7 +86,7 @@ every run in `runs/traces.jsonl`. The UI calls the same `run_agent()` and adds n
 agent logic; it runs one request at a time.
 
 **النسخة** (version), in the page header: a switch between the variants (baseline, prompt_only,
-tools_only, guarded, prompt_only_human, guarded_human) for the next request, for demos. It starts on
+tools_only, guarded, baseline_human, prompt_only_human, guarded_human) for the next request, for demos. It starts on
 `AGENT_VARIANT` and the browser remembers the last choice. Every run records its variant (trace,
 history column, Langfuse tag). `UI_VARIANT_SWITCH=off` hides it; every run then uses `AGENT_VARIANT`.
 
@@ -244,6 +244,7 @@ python evaluation/report.py                           # summary of runs/eval_res
 python evaluation/p1_eval.py --dry-run                       # check paths and plan, no model calls
 python evaluation/p1_eval.py --split dev --limit 5           # a few dev cases
 python evaluation/p1_eval.py --split dev --variant guarded --repeats 3
+python evaluation/p1_eval.py --split dev --variant baseline_human --reviewer careful   # simulated staff
 python evaluation/report.py --file runs/p1_results.jsonl     # the comparison report
 ```
 
@@ -354,5 +355,5 @@ Known limits:
 - Traces keep no document text and pseudonymise personal data (`TRACE_PII=redact`, `agent/privacy.py`).
 - Evaluation: `--workers N` runs cases in parallel; `--human-approval` (default `off`); every run has
   its own duplicate-request scope. Markdown comparison: `python evaluation/report.py --since <batch> --markdown out.md`.
-- Version keys: `baseline`, `prompt_only`, `guarded`, and with staff approval of every action
-  `prompt_only_human`, `guarded_human` (table in `docs/guardrails_v2.md`). The key decides approval, not `.env`.
+- Version keys: `baseline`, `prompt_only`, `tools_only`, `guarded`, and with staff approval of every action
+  `baseline_human`, `prompt_only_human`, `guarded_human` (table in `docs/guardrails_v2.md`). The key decides approval, not `.env`.

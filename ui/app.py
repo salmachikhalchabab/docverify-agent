@@ -463,7 +463,7 @@ def staff_pending(request: Request) -> list[dict[str, Any]]:
         out.append({
             "run_id": run_id, "timestamp": t.get("timestamp"), "service": t.get("service"),
             "requester_email": t.get("requester_email"), "documents": [Path(d["path"]).name for d in t.get("documents", [])],
-            # the rules' recommendation (null in prompt_only_human: no rules) and the AI's own answer
+            # the rules' recommendation (null in baseline_human / prompt_only_human: no rules) and the AI's own answer
             "policy_verdict": case.get("recommendation", gs.get("policy_verdict")),
             "reasons": gs.get("reasons", []), "flags": gs.get("flags", []),
             "model_decision": case.get("agent_decision", gs.get("model_decision")),

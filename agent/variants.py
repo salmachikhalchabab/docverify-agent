@@ -9,10 +9,15 @@ final JSON is taken as-is.
 |--------------------|-------------|------------------------------------------|---------------------|
 | baseline           | baseline    | none                                     | no                  |
 | prompt_only        | prompt_only | none (a stricter prompt is the only one) | no                  |
-| tools_only         | baseline    | deterministic, document-level rules off  | no                  |
+| tools_only         | tools_only  | deterministic, document-level rules off  | no                  |
 | guarded            | guarded     | deterministic, everything on             | no                  |
+| baseline_human     | baseline    | none                                     | every action waits  |
 | prompt_only_human  | prompt_only | none                                     | every action waits  |
 | guarded_human      | guarded     | deterministic, everything on             | every action waits  |
+
+Prompts: tools_only = baseline + how refusals look; guarded = that + the data markers (agent/prompts.py).
+Human approval as a 2x2 with the code guardrails: baseline / baseline_human, guarded / guarded_human;
+prompt_only / prompt_only_human adds the prompt-only line.
 
 "Human approval" (guardrail G16): send_email, register_masters and issue_graduation_notice
 are not performed by the agent; they are stored, in order, and a staff member approves
@@ -149,17 +154,20 @@ def _tools_only(**kwargs: Any) -> Guardrails:
     return DeterministicGuardrails(document_rules=False, **kwargs)
 
 
-def _prompt_only_human(**kwargs: Any) -> Guardrails:
+def _human_only(**kwargs: Any) -> Guardrails:
+    """No guardrails in code, only a staff member's yes or no (baseline_human, prompt_only_human)."""
     return HumanApproval(Guardrails(**kwargs))
 
 
 VARIANTS: dict[str, VariantSpec] = {
     "baseline": VariantSpec(name="baseline", prompt_key="baseline"),
     "prompt_only": VariantSpec(name="prompt_only", prompt_key="prompt_only"),
-    "tools_only": VariantSpec(name="tools_only", prompt_key="baseline", guardrails_factory=_tools_only),
+    "tools_only": VariantSpec(name="tools_only", prompt_key="tools_only", guardrails_factory=_tools_only),
     "guarded": VariantSpec(name="guarded", prompt_key="guarded", guardrails_factory=_deterministic),
+    "baseline_human": VariantSpec(name="baseline_human", prompt_key="baseline",
+                                  guardrails_factory=_human_only, human_approval="actions"),
     "prompt_only_human": VariantSpec(name="prompt_only_human", prompt_key="prompt_only",
-                                     guardrails_factory=_prompt_only_human, human_approval="actions"),
+                                     guardrails_factory=_human_only, human_approval="actions"),
     "guarded_human": VariantSpec(name="guarded_human", prompt_key="guarded",
                                  guardrails_factory=_deterministic, human_approval="actions"),
 }

@@ -542,9 +542,11 @@ $("files").onchange = () => {
 
 const VARIANT_AR = { baseline: "النسخة الأساسية · بدون ضوابط", prompt_only: "تعليمات أمان بالـprompt فقط",
   tools_only: "ضوابط على الأدوات فقط", guarded: "مع الضوابط (guardrails)",
-  prompt_only_human: "تعليمات بالـprompt + موافقة موظف", guarded_human: "مع الضوابط + موافقة موظف" };
+  baseline_human: "الأساسية + موافقة موظف", prompt_only_human: "تعليمات بالـprompt + موافقة موظف",
+  guarded_human: "مع الضوابط + موافقة موظف" };
 const VARIANT_SHORT = { baseline: "أساسية", prompt_only: "تعليمات فقط", tools_only: "ضوابط أدوات",
-  guarded: "مع الضوابط", prompt_only_human: "تعليمات + موظف", guarded_human: "ضوابط + موظف" };
+  guarded: "مع الضوابط", baseline_human: "أساسية + موظف", prompt_only_human: "تعليمات + موظف",
+  guarded_human: "ضوابط + موظف" };
 const VARIANT_KEY = "dv_variant";
 function currentVariant() {
   const sel = $("variantSel");
