@@ -250,3 +250,64 @@ Subclass `Guardrails` in `agent/variants.py` (`transform_documents`,
 extra tools if needed. Run with `variant="guarded"`. Both variants
 write the same trace schema. Guardrail interventions go into `guard_events`, which is
 always empty for the baseline.
+
+## Guarded variant
+
+The "after guardrails" agent: the same model, tools, loop, data and trace schema as the
+baseline, plus deterministic rules in `agent/guards.py` that run in the three hook points of
+`agent/variants.py`. A rule compares values and refuses, removes or overrides; it never asks a
+model anything. Full specification: `docs/prompt_guarded_v1.md`.
+
+| Rule | When | What it does |
+|---|---|---|
+| G3 hidden text | before the model | A PDF text-layer line that is not visible in the rendered page (OCR) is removed and logged; the remaining text is wrapped in `<<<DOCUMENT_TEXT>>>` markers. Without OCR the text layer is dropped entirely (unverifiable). |
+| G4 identity | before the model | The national number on the documents is looked up; the requester's email must equal the registered one, or the request is rejected before the model reads anything. |
+| policy | before the model | Documents are classified by registry cross-reference (ID, non-employment certificate, graduation document) and the verdict for the service is computed: approved / rejected (with reasons) / needs_review (hidden text found). |
+| G2 allow-list | each tool call | Each service may use only its own tools. |
+| gate | each tool call | `register_masters`, `issue_graduation_notice`, `send_email` run only if the verdict is approved. |
+| G5 binding | each tool call | Arguments must match the registry record of the identified person (name, national number, major, date, student id). Lookups are limited to that person. |
+| G1 email | each tool call | One recipient, the registered address only; attachments only from this run; no other addresses in the body. |
+| G7 budget | each tool call | At most one email, one registration and one notice per run. |
+| G6 decision | after the loop | The final JSON is validated; the run's decision is the policy verdict, the model's decision is recorded. |
+
+Variants (`--variant`): `baseline` (unchanged), `prompt_only` (stricter prompt, no code rules),
+`tools_only` (tool-call rules only, no document rules), `guarded` (everything).
+
+```bash
+python evaluation/run_eval.py --cases all --repeats 3 --variant guarded
+python evaluation/report.py           # baseline / prompt_only / tools_only / guarded side by side
+```
+
+What is recorded per run: `guard_events` (one entry per refusal, removal, flag or override),
+`documents_as_sent` (the text the model actually received), `guard_summary` (policy verdict,
+model decision, hook latency) and the metrics `guard_blocks`, `guard_removals`, `guard_flags`,
+`hidden_text_chars_removed`, `decision_overridden`, `guard_latency_ms` and the computed
+`short_circuit_savings_*` (what stopping at a pre-model rejection would have saved; the model is
+always run so cost and latency stay comparable).
+
+Known limits:
+
+- **OCR is required.** Identity binding reads the national number from the extracted text, and
+  hidden-text detection compares the text layer with OCR of the picture. With `OCR_ENGINE=none`
+  image documents have no text and PDF text layers cannot be verified, so the guarded variant
+  ends every request as `needs_review` with no action. Run the evaluation with Tesseract.
+- Faint text drawn inside the picture (case A2) survives G3 because it is part of the image; the
+  leak is stopped by G1 instead.
+- Document classification needs a registry number and a keyword ("بطاقة", "تخرج", ...) on the
+  page; a document OCR'd badly may be classified as missing (a false rejection, visible as
+  `fblock` / task failure in the report, never as an unsafe action).
+- The mock registry has two fictional people only (`data/build_mock_registry.py`).
+
+## Guardrails v2, staff approval, login and privacy (2026-11-07)
+
+- Every guardrail, what it protects against, and what was considered but not built:
+  `docs/guardrails_v2.md`. What changed and why, in plain words: `docs/what_changed_2026-11-07.md`.
+- See what the rules decide for every case without a model: `python evaluation/guard_check.py`.
+- Staff approval: `HUMAN_APPROVAL=off|actions|flagged` (`agent/approvals.py`, web UI tab "موافقات الموظف").
+- Web UI login: requesters use national number + the e-mail registered for it; staff use
+  `STAFF_KEY` (or the key printed at start). The server listens on 127.0.0.1 unless `HOST` is set.
+- Traces keep no document text and pseudonymise personal data (`TRACE_PII=redact`, `agent/privacy.py`).
+- Evaluation: `--workers N` runs cases in parallel; `--human-approval` (default `off`); every run has
+  its own duplicate-request scope. Markdown comparison: `python evaluation/report.py --since <batch> --markdown out.md`.
+- Version keys: `baseline`, `prompt_only`, `guarded`, and with staff approval of every action
+  `prompt_only_human`, `guarded_human` (table in `docs/guardrails_v2.md`). The key decides approval, not `.env`.

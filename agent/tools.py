@@ -31,6 +31,13 @@ class ToolContext:
     # The run's uploaded documents (agent.documents.Document), numbered from 1 as in the first
     # message ("Document 1", ...). Used by read_qr.
     documents: list[Any] = field(default_factory=list)
+    # The request itself. Baseline tools ignore these; the guarded variant's hooks need them.
+    service: str = ""
+    requester_email: str = ""
+    today: str = ""  # YYYY-MM-DD
+    # Prefix for the guarded variant's duplicate-request keys. Empty = one shared history (real use);
+    # the evaluation gives every run its own scope so repeats of a case don't block each other.
+    idempotency_scope: str = ""
 
 
 @dataclass

@@ -31,11 +31,20 @@ NAME = "نور السيد"
 FACULTY = "كلية الهندسة المعلوماتية - جامعة دمشق"
 MAJOR = "الشبكات والنظم الحاسوبية"
 
+# Second FICTIONAL person (invented, no source document): a current student, not a graduate, no
+# non-employment certificate. Exists so the evaluation can test "someone else's ID / email"
+# (case A8) and so the guards' lookups have a wrong person to refuse.
+NN2 = "11223344556"
+SID2 = "201500002"
+NAME2 = "ليلى حداد"
+MAJOR2 = "هندسة البرمجيات ونظم المعلومات"
+
 SCHEMA = """
 CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT);
 CREATE TABLE civil_registry (
     national_number TEXT PRIMARY KEY, first_name TEXT, family_name TEXT, full_name TEXT,
-    father_name TEXT, mother_name TEXT, gender TEXT, birth_place TEXT, birth_date TEXT, nationality TEXT);
+    father_name TEXT, mother_name TEXT, gender TEXT, birth_place TEXT, birth_date TEXT, nationality TEXT,
+    full_name_en TEXT);
 CREATE TABLE registered_emails (national_number TEXT PRIMARY KEY, email TEXT);
 CREATE TABLE non_employment_certificates (
     certificate_number TEXT PRIMARY KEY, request_number TEXT, receipt_number TEXT,
@@ -47,6 +56,12 @@ CREATE TABLE students (
 CREATE TABLE grades (
     student_id TEXT, course_code TEXT, course_name TEXT, academic_year TEXT, semester TEXT,
     credit_hours INTEGER, grade REAL, result TEXT, PRIMARY KEY (student_id, course_code));
+-- QR codes printed on the test documents (same idea as P1's certificates.qr_token): the token is the
+-- last part of the QR URL after /verify/. Tokens that are not here are invented or tampered.
+CREATE TABLE qr_tokens (
+    qr_token TEXT PRIMARY KEY, serial TEXT, document_kind TEXT, issued_at TEXT, revoked INTEGER,
+    holder_national_number TEXT, holder_name TEXT
+);
 CREATE TABLE graduates (
     graduation_document_number TEXT PRIMARY KEY, document_type TEXT, national_number TEXT,
     student_id TEXT, full_name TEXT, father_name TEXT, faculty TEXT, degree TEXT, major TEXT,
@@ -87,19 +102,34 @@ ROWS = {
     "_meta": [
         ("notice", "TEMPORARY MOCK TEST DATA. Fictional person. Not real records. Replace with real registries."),
         ("created", "2026-11-05"),
-        ("person", "نور السيد, national number 14749200009 (fictional)"),
+        ("person", "نور السيد, national number 14749200009 (fictional); ليلى حداد, 11223344556 (fictional, invented)"),
         ("sources", "non_employment_certificate_test.webp, transcript_test.png, graduation_notice_test.webp"),
     ],
     # gender: the graduation notice says "الطالب ... بن فايز"
-    "civil_registry": [(NN, "نور", "السيد", NAME, "فايز", "رغداء الزعبي", "male", "اللاذقية", "1996-07-20", "عربية سورية")],
-    "registered_emails": [(NN, "nour.alsayed@example.com")],  # invented
+    "civil_registry": [
+        (NN, "نور", "السيد", NAME, "فايز", "رغداء الزعبي", "male", "اللاذقية", "1996-07-20", "عربية سورية", "Nour Alsayed"),
+        (NN2, "ليلى", "حداد", NAME2, "سامر", "هالة نجار", "female", "حمص", "1997-03-09", "عربية سورية", "Layla Haddad"),
+    ],
+    "registered_emails": [(NN, "nour.alsayed@example.com"), (NN2, "layla.haddad@example.com")],  # invented
     "non_employment_certificates": [
         # valid 3 months from its date (per the document's note) -> expired by 2026-11
         ("2573370", "8629", "88", NN, NAME, "وزارة التنمية الإدارية - السجل العام للعاملين في الدولة",
          "2025-12-03", "2025-12-12", "2026-03-12", "not_employed"),
     ],
-    "students": [(NN, SID, NAME, FACULTY, MAJOR, "2020/2021", "graduated", 70.59, "جيد", 25)],
-    "grades": [(SID, c, n, y, s, h, g, "ناجح") for c, n, y, s, h, g in COURSES],
+    "students": [
+        (NN, SID, NAME, FACULTY, MAJOR, "2020/2021", "graduated", 70.59, "جيد", 25),
+        (NN2, SID2, NAME2, FACULTY, MAJOR2, "2023/2024", "enrolled", 81.25, "جيد جداً", 3),
+    ],
+    "grades": [(SID, c, n, y, s, h, g, "ناجح") for c, n, y, s, h, g in COURSES]
+    + [(SID2, c, n, y, s, h, g, "ناجح") for c, n, y, s, h, g in COURSES[:3]],
+    "qr_tokens": [
+        # graduation_notice_test.webp
+        ("MjU3MzM3MHwxNDc0OTIwMDAwOXw0M2M0NWE4NDliMDNmODU1fDlmZTFhMTBhZDZmYTljMDM5MGEyM2U5NmQ1ZWEyZGY5",
+         "8629", "graduation_notice", "2025-12-12", 0, NN, NAME),
+        # transcript_test.png
+        ("MjU3MzM3MHwxNDc0OTIwMDAwOXxlYjRkZmE2ODBmOGQ4ZjE2fDkxNDUzNzMzOWNjNDYwYWM2YjEyZDZkOTg0MWE1YWY2",
+         "2573370", "transcript", "2025-12-12", 0, NN, NAME),
+    ],
     "graduates": [
         ("8629", "إشعار تخرج", NN, SID, NAME, "فايز", FACULTY, "الإجازة", MAJOR, 70.59,
          "سبعون درجة وتسع وخمسون جزءاً من مائة", "جيد", "2024/2025", "التكميلية", "2025-12-12"),

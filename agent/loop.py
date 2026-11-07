@@ -159,6 +159,7 @@ def run_loop(
 
         for tc in resp.tool_calls:
             t_hook = time.perf_counter()
+            guardrails.current_step = step_no + 1  # the step this tool call will be recorded as
             override = guardrails.intercept_tool_call(tc.name, tc.arguments_raw, ctx)
             if override is not None:
                 args: Any = None

@@ -128,6 +128,33 @@ class StateStore(Protocol):
         """All rows written by this run, keyed by table: outbox, masters_registrations, graduation_notices."""
         ...
 
+    # -- used only by the guarded variant (the baseline never calls these) --------------------
+
+    def claim_idempotency_key(self, key: str, run_id: str, max_age_s: float | None = None) -> dict[str, Any] | None:
+        """Record `key` for this run. Returns None if it was new (or its earlier claim is older than
+        max_age_s, which is then replaced), else the earlier claim (key already used)."""
+        ...
+
+    def get_idempotency_key(self, key: str) -> dict[str, Any] | None:
+        """The earlier claim of `key`, or None (read only)."""
+        ...
+
+    def add_pending_action(self, run_id: str, seq: int, tool: str, arguments: dict[str, Any], reason: str) -> str: ...
+
+    def pending_actions(self, run_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]: ...
+
+    def set_pending_status(self, action_id: str, status: str, reviewer: str, result: Any = None) -> None: ...
+
+    # one case per run that a staff member must decide (human-in-the-loop versions)
+    def open_staff_case(self, run_id: str, service: str, recommendation: str | None, reasons: list[str],
+                        agent_decision: str | None) -> None: ...
+
+    def staff_cases(self, status: str | None = None) -> list[dict[str, Any]]: ...
+
+    def staff_case(self, run_id: str) -> dict[str, Any] | None: ...
+
+    def close_staff_case(self, run_id: str, decision: str, reviewer: str, note: str = "") -> None: ...
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS masters_registrations (
@@ -145,6 +172,28 @@ CREATE TABLE IF NOT EXISTS outbox (
 CREATE INDEX IF NOT EXISTS ix_reg_run ON masters_registrations(run_id);
 CREATE INDEX IF NOT EXISTS ix_notice_run ON graduation_notices(run_id);
 CREATE INDEX IF NOT EXISTS ix_outbox_run ON outbox(run_id);
+-- guarded variant: one row per (service, person, action) ever performed -> no duplicate requests
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key TEXT PRIMARY KEY, run_id TEXT NOT NULL, created_at TEXT NOT NULL
+);
+-- guarded variant with human approval: actions the agent asked for, waiting for a staff member
+CREATE TABLE IF NOT EXISTS pending_actions (
+    id TEXT PRIMARY KEY, run_id TEXT NOT NULL, created_at TEXT NOT NULL, seq INTEGER NOT NULL,
+    tool TEXT NOT NULL, arguments TEXT NOT NULL, reason TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending | approved | rejected
+    reviewer TEXT, reviewed_at TEXT, result TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_pending_run ON pending_actions(run_id);
+-- human-in-the-loop versions: every request waits here for a staff member's final decision
+CREATE TABLE IF NOT EXISTS staff_cases (
+    run_id TEXT PRIMARY KEY, created_at TEXT NOT NULL, service TEXT,
+    recommendation TEXT,          -- what the rules recommend (approved / needs_review / rejected; null = no rules)
+    reasons TEXT,                 -- JSON list: the problems the rules found
+    agent_decision TEXT,          -- what the AI said
+    status TEXT NOT NULL DEFAULT 'pending',  -- pending | decided
+    decision TEXT,                -- the staff member's final decision: approved | rejected
+    reviewer TEXT, reviewed_at TEXT, note TEXT
+);
 """
 
 SIDE_EFFECT_TABLES = ("outbox", "masters_registrations", "graduation_notices")
@@ -152,6 +201,10 @@ SIDE_EFFECT_TABLES = ("outbox", "masters_registrations", "graduation_notices")
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _age_s(iso: str) -> float:
+    return (datetime.now(timezone.utc) - datetime.fromisoformat(iso)).total_seconds()
 
 
 def _as_text(v: Any) -> str | None:
@@ -209,6 +262,77 @@ class SQLiteStateStore:
             "msg",
             {"run_id": run_id, "to_address": to, "subject": subject, "body": body, "attachment_id": attachment_id},
         )
+
+    def claim_idempotency_key(self, key: str, run_id: str, max_age_s: float | None = None) -> dict[str, Any] | None:
+        with session(self._conn) as c:
+            cur = c.execute("INSERT OR IGNORE INTO idempotency_keys (key, run_id, created_at) VALUES (?, ?, ?)",
+                            (key, run_id, _now()))
+            if cur.rowcount == 1:
+                return None
+            row = c.execute("SELECT * FROM idempotency_keys WHERE key = ?", (key,)).fetchone()
+            if row and max_age_s is not None and _age_s(row["created_at"]) > max_age_s:
+                c.execute("UPDATE idempotency_keys SET run_id = ?, created_at = ? WHERE key = ?", (run_id, _now(), key))
+                return None
+            return dict(row) if row else None
+
+    def get_idempotency_key(self, key: str) -> dict[str, Any] | None:
+        with session(self._conn) as c:
+            row = c.execute("SELECT * FROM idempotency_keys WHERE key = ?", (key,)).fetchone()
+        return dict(row) if row else None
+
+    def add_pending_action(self, run_id: str, seq: int, tool: str, arguments: dict[str, Any], reason: str) -> str:
+        return self._insert("pending_actions", "pending", {
+            "run_id": run_id, "seq": seq, "tool": tool,
+            "arguments": json.dumps(arguments, ensure_ascii=False), "reason": reason, "status": "pending"})
+
+    def pending_actions(self, run_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]:
+        q, args = "SELECT * FROM pending_actions WHERE 1=1", []
+        if run_id is not None:
+            q, args = q + " AND run_id = ?", [*args, run_id]
+        if status is not None:
+            q, args = q + " AND status = ?", [*args, status]
+        with session(self._conn) as c:
+            rows = [dict(r) for r in c.execute(q + " ORDER BY created_at, seq", args).fetchall()]
+        for r in rows:
+            r["arguments"] = json.loads(r["arguments"])
+            r["result"] = json.loads(r["result"]) if r.get("result") else None
+        return rows
+
+    def open_staff_case(self, run_id: str, service: str, recommendation: str | None, reasons: list[str],
+                        agent_decision: str | None) -> None:
+        with session(self._conn) as c:
+            c.execute("INSERT OR IGNORE INTO staff_cases (run_id, created_at, service, recommendation, reasons, "
+                      "agent_decision, status) VALUES (?, ?, ?, ?, ?, ?, 'pending')",
+                      (run_id, _now(), service, recommendation, json.dumps(reasons, ensure_ascii=False), agent_decision))
+
+    def staff_cases(self, status: str | None = None) -> list[dict[str, Any]]:
+        q, args = "SELECT * FROM staff_cases", []
+        if status:
+            q, args = q + " WHERE status = ?", [status]
+        with session(self._conn) as c:
+            rows = [dict(r) for r in c.execute(q + " ORDER BY created_at", args).fetchall()]
+        for r in rows:
+            r["reasons"] = json.loads(r["reasons"] or "[]")
+        return rows
+
+    def staff_case(self, run_id: str) -> dict[str, Any] | None:
+        with session(self._conn) as c:
+            row = c.execute("SELECT * FROM staff_cases WHERE run_id = ?", (run_id,)).fetchone()
+        if row is None:
+            return None
+        out = dict(row)
+        out["reasons"] = json.loads(out["reasons"] or "[]")
+        return out
+
+    def close_staff_case(self, run_id: str, decision: str, reviewer: str, note: str = "") -> None:
+        with session(self._conn) as c:
+            c.execute("UPDATE staff_cases SET status = 'decided', decision = ?, reviewer = ?, reviewed_at = ?, note = ? "
+                      "WHERE run_id = ?", (decision, reviewer, _now(), note, run_id))
+
+    def set_pending_status(self, action_id: str, status: str, reviewer: str, result: Any = None) -> None:
+        with session(self._conn) as c:
+            c.execute("UPDATE pending_actions SET status = ?, reviewer = ?, reviewed_at = ?, result = ? WHERE id = ?",
+                      (status, reviewer, _now(), json.dumps(result, ensure_ascii=False, default=str), action_id))
 
     def side_effects(self, run_id: str) -> dict[str, list[dict[str, Any]]]:
         out: dict[str, list[dict[str, Any]]] = {}

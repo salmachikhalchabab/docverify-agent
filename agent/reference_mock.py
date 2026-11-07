@@ -26,6 +26,11 @@ MOCK_LAYOUT = SQLiteLayout(
             "University student records, including the student_id used by get_transcript. "
             "Key: national number (11 digits).",
         ),
+        "qr_tokens": RegistrySpec(
+            "qr_tokens", "qr_token",
+            "The registry record behind a document's QR code: which document it is (serial, kind, issue date), "
+            "whether it is revoked, and its holder. Key: the token, i.e. the last part of the QR URL after /verify/.",
+        ),
         "graduates": RegistrySpec(
             "graduates", "national_number",
             "Graduates: degree, major, GPA, academic year and the serial number of their issued "

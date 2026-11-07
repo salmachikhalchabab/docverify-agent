@@ -205,17 +205,63 @@ tr.sel td { background: var(--brand-soft); }
 <header class="top"><div class="top-in">
   <div class="brand">
     <div class="seal" id="sealIcon"></div>
-    <div><div class="t">مساعد شؤون الطلاب</div><div class="s">النسخة الأساسية · بدون ضوابط</div></div>
+    <div><div class="t">مساعد شؤون الطلاب</div><div class="s" id="subTitle">…</div></div>
   </div>
   <div class="pills">
     <span class="pill">الموديل <b class="ltr" id="pModel">…</b></span>
     <span class="pill">البيانات <b id="pData">…</b></span>
     <span class="pill">تاريخ اليوم <b class="ltr" id="pDate">…</b></span>
+    <span class="pill hidden" id="pUser">…</span>
+    <button id="logoutBtn" class="btn ghost hidden" type="button">خروج</button>
   </div>
-  <nav class="seg"><button id="tabNew" class="on">طلب جديد</button><button id="tabHist">السجل</button></nav>
+  <nav class="seg" id="mainNav"><button id="tabNew" class="on">طلب جديد</button><button id="tabHist">السجل</button><button id="tabStaff" class="hidden">موافقات الموظف</button></nav>
 </div></header>
 
 <main>
+  <!-- ================= LOGIN ================= -->
+  <section id="viewLogin" class="hidden grid2">
+    <div class="card" id="studentLoginCard">
+      <div class="card-h"><h2>دخول مقدّم الطلب</h2></div>
+      <div class="card-b">
+        <div class="sec">
+          <label class="l" for="loginNN">الرقم الوطني</label>
+          <input id="loginNN" class="field ltr" inputmode="numeric" placeholder="11 رقم">
+        </div>
+        <div class="sec">
+          <label class="l" for="loginEmail">الإيميل المسجّل</label>
+          <input id="loginEmail" type="email" class="field ltr" placeholder="name@example.com">
+        </div>
+        <button id="loginBtn" class="btn primary" type="button">دخول</button>
+        <div id="loginError" class="err hidden"></div>
+      </div>
+    </div>
+    <div class="card" id="staffLoginCard">
+      <div class="card-h"><h2>دخول الموظف</h2></div>
+      <div class="card-b">
+        <div class="sec">
+          <label class="l" for="staffKey">مفتاح الموظف</label>
+          <input id="staffKey" type="password" class="field ltr" autocomplete="off">
+          <div class="hint">موجود بـ STAFF_KEY بملف ‎.env‎ أو بـ runs/.staff_key</div>
+        </div>
+        <button id="staffBtn" class="btn primary" type="button">دخول كموظف</button>
+        <div id="staffError" class="err hidden"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= STAFF ================= -->
+  <section id="viewStaff" class="hidden stack">
+    <div class="card">
+      <div class="card-h" style="justify-content:space-between; flex-wrap:wrap; gap:10px">
+        <h2>إجراءات بانتظار موافقة موظف</h2>
+        <div class="row">
+          <input id="reviewer" class="field" placeholder="اسم الموظف المراجِع" style="width:200px">
+          <button id="staffRefresh" class="btn ghost" type="button">تحديث</button>
+        </div>
+      </div>
+      <div class="card-b"><div id="pendingList" class="stack"></div></div>
+    </div>
+  </section>
   <!-- ================= NEW REQUEST ================= -->
   <section id="viewNew" class="grid2">
     <div class="card sticky">
@@ -228,7 +274,7 @@ tr.sel td { background: var(--brand-soft); }
         <div class="sec">
           <label class="l" for="email">إيميل مقدّم الطلب</label>
           <input id="email" type="email" class="field ltr" placeholder="name@example.com">
-          <div class="hint">كما كتبه مقدّم الطلب، بدون أي تحقق</div>
+          <div class="hint" id="emailHint">كما كتبه مقدّم الطلب، بدون أي تحقق</div>
         </div>
         <div class="sec">
           <div class="sec-t"><span>الوثائق المرفقة</span><span id="docCount" class="muted">0 مختارة</span></div>
@@ -286,6 +332,11 @@ tr.sel td { background: var(--brand-soft); }
 </main>
 
 <script>
+// Two addresses, one app: "/" is the students' page, "/staff" the staff page. Each shows only its own login.
+const STAFF_PAGE = /\/staff\/?$/.test(location.pathname);
+// each page has its own login (a student and staff can be logged in side by side in one browser)
+const _fetch = window.fetch.bind(window);
+window.fetch = (url, opts = {}) => _fetch(url, { ...opts, headers: { ...(opts.headers || {}), "X-Portal": STAFF_PAGE ? "staff" : "student" } });
 const SERVICES = [
   { id: "transcript", name: "كشف علامات", docs: "الهوية", icon: "doc" },
   { id: "graduation_notice", name: "إشعار تخرج", docs: "الهوية", icon: "cap" },
@@ -352,14 +403,96 @@ $("runIcon").append(icon("play"));
 $("chev").append(icon("chev"));
 
 function showTab(which) {
+  $("viewLogin").classList.toggle("hidden", which !== "login");
   $("viewNew").classList.toggle("hidden", which !== "new");
   $("viewHist").classList.toggle("hidden", which !== "hist");
+  $("viewStaff").classList.toggle("hidden", which !== "staff");
+  $("mainNav").classList.toggle("hidden", which === "login");
   $("tabNew").classList.toggle("on", which === "new");
   $("tabHist").classList.toggle("on", which === "hist");
+  $("tabStaff").classList.toggle("on", which === "staff");
   if (which === "hist") loadRuns();
+  if (which === "staff") loadStaff();
 }
 $("tabNew").onclick = () => showTab("new");
 $("tabHist").onclick = () => showTab("hist");
+$("tabStaff").onclick = () => showTab("staff");
+
+// ---------- login ----------
+async function post(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || r.statusText);
+  return data;
+}
+function loginError(id, msg) { const e = $(id); e.textContent = msg; e.classList.toggle("hidden", !msg); }
+$("loginBtn").onclick = async () => {
+  loginError("loginError", "");
+  try {
+    await post("api/auth/login", { national_number: $("loginNN").value.trim(), email: $("loginEmail").value.trim() });
+    location.reload();
+  } catch (e) {
+    loginError("loginError", e.message.startsWith("too many") ? "محاولات خاطئة كتير، جرّب بعد 10 دقايق."
+      : "الرقم الوطني والإيميل ما بيطابقوا السجل.");
+  }
+};
+$("staffBtn").onclick = async () => {
+  loginError("staffError", "");
+  try { await post("api/auth/staff", { key: $("staffKey").value }); location.reload(); }
+  catch (e) { loginError("staffError", "المفتاح غلط."); }
+};
+$("logoutBtn").onclick = async () => { await fetch("api/auth/logout", { method: "POST" }); location.reload(); };
+
+// ---------- staff: approvals ----------
+async function loadStaff() {
+  const pending = await (await fetch("api/staff/pending")).json();
+  const list = $("pendingList");
+  if (!pending.length) list.replaceChildren(h("div", { class: "muted" }, "ما في طلبات بانتظار قرار."));
+  else list.replaceChildren(...pending.map(p => {
+    const note = h("input", { class: "field", placeholder: "ملاحظة للطالب (اختياري)", dir: "auto" });
+    // no browser pop-ups (some browsers block them silently): messages and a second click on the card itself
+    const msg = h("div", { class: "note hidden" });
+    const say = (text, bad = false) => { msg.textContent = text; msg.className = bad ? "err" : "note"; };
+    let armed = null;
+    const decide = async (approve, btn, label) => {
+      const reviewer = $("reviewer").value.trim();
+      if (!reviewer) { say("اكتب اسمك بخانة «اسم الموظف المراجِع» فوق، وبعدين اضغط مرة تانية.", true); $("reviewer").focus(); return; }
+      if (armed !== approve) {  // first click: ask to confirm on the button itself
+        armed = approve;
+        btn.textContent = label + " — متأكد؟ اضغط مرة تانية";
+        say(p.actions.length ? (approve ? "الموافقة رح تنفّذ الإجراءات المعروضة." : "الرفض: ما رح يتنفّذ شي.")
+          : (approve ? "الموافقة على الطلب (ما في إجراءات محضّرة)." : "رفض الطلب."));
+        setTimeout(() => { if (armed === approve) { armed = null; btn.textContent = label; } }, 6000);
+        return;
+      }
+      armed = null;
+      btn.disabled = true;
+      try {
+        await post("api/staff/review", { run_id: p.run_id, approve, reviewer, note: note.value.trim() });
+        say(approve ? "تم: الطلب مقبول، والطالب رح يشوف القرار." : "تم: الطلب مرفوض، والطالب رح يشوف القرار.");
+        setTimeout(loadStaff, 1500);
+      } catch (e) { btn.disabled = false; btn.textContent = label; say("ما زبط: " + e.message, true); }
+    };
+    const problems = [...(p.reasons || []), ...(p.flags || [])];
+    return h("div", { class: "card" }, h("div", { class: "card-b" },
+      h("div", {}, h("b", {}, SERVICE_AR[p.service] || p.service || "?"), " · ", h("span", { class: "ltr muted" }, p.run_id.slice(0, 12)),
+        " · ", h("span", { class: "ltr" }, p.requester_email || "")),
+      h("div", { class: "muted" }, "الوثائق: ", (p.documents || []).join("، ")),
+      h("div", {}, "توصية الضوابط: ", h("b", {}, p.policy_verdict ? (DECISION_AR[p.policy_verdict] || p.policy_verdict) : "ما في ضوابط بهالنسخة"),
+        " · رأي الإيجنت: ", h("b", {}, DECISION_AR[p.model_decision] || p.model_decision || "—")),
+      problems.length ? h("ul", {}, ...problems.map(r => h("li", {}, reasonAr(r)))) : h("div", { class: "muted" }, "ما في ملاحظات."),
+      p.actions.length
+        ? h("ol", {}, ...p.actions.map(a => h("li", {}, h("b", {}, TOOL_AR[a.tool] || a.tool), " ",
+            h("code", { class: "ltr" }, JSON.stringify(a.arguments)))))
+        : h("div", { class: "muted" }, "ما في إجراءات محضّرة (الإيجنت ما طلب ينفّذ شي)."),
+      note,
+      h("div", { class: "row", style: "margin-top:8px" },
+        h("button", { class: "btn primary", type: "button", style: "width:auto", onclick: (e) => decide(true, e.currentTarget, "موافقة") }, "موافقة"),
+        h("button", { class: "btn ghost", type: "button", onclick: (e) => decide(false, e.currentTarget, "رفض") }, "رفض")),
+      msg));
+  }));
+}
+$("staffRefresh").onclick = loadStaff;
 
 function renderServices() {
   $("services").replaceChildren(...SERVICES.map(s => {
@@ -395,8 +528,38 @@ $("files").onchange = () => {
   updateCount();
 };
 
+const VARIANT_AR = { baseline: "النسخة الأساسية · بدون ضوابط", prompt_only: "تعليمات أمان بالـprompt فقط",
+  tools_only: "ضوابط على الأدوات فقط", guarded: "مع الضوابط (guardrails)",
+  prompt_only_human: "تعليمات بالـprompt + موافقة موظف", guarded_human: "مع الضوابط + موافقة موظف" };
+function showLogin() {
+  $("studentLoginCard").classList.toggle("hidden", STAFF_PAGE);
+  $("staffLoginCard").classList.toggle("hidden", !STAFF_PAGE);
+  $("viewLogin").classList.toggle("grid2", false);
+  $("viewLogin").style.maxWidth = "460px";
+  $("viewLogin").style.margin = "0 auto";
+  $("subTitle").textContent = STAFF_PAGE ? "دخول الموظفين" : "تسجيل الدخول";
+  showTab("login");
+}
 async function init() {
-  CONFIG = await (await fetch("api/config")).json();
+  const res = await fetch("api/config");
+  if (res.status === 401) { showLogin(); return; }
+  CONFIG = await res.json();
+  // logged in with the other role for this page: staff go to /staff; a student on /staff sees the staff login
+  if (CONFIG.auth && CONFIG.role === "staff" && !STAFF_PAGE) { location.href = "staff"; return; }
+  if (CONFIG.auth && CONFIG.role !== "staff" && STAFF_PAGE) { showLogin(); return; }
+  $("subTitle").textContent = VARIANT_AR[CONFIG.variant] || CONFIG.variant;
+  const staff = CONFIG.role === "staff";
+  $("pUser").textContent = staff ? "موظف" : CONFIG.email;
+  $("pUser").classList.toggle("hidden", !CONFIG.auth);
+  $("logoutBtn").classList.toggle("hidden", !CONFIG.auth);
+  $("tabStaff").classList.toggle("hidden", !staff);
+  $("resetBtn").classList.toggle("hidden", !staff);
+  // a requester always runs as the verified address; staff may replay cases with any address
+  $("email").disabled = !staff;
+  if (!staff) $("email").value = CONFIG.email;
+  $("emailHint").textContent = staff ? "موظف: إيميل مقدّم الطلب المُحاكى (لإعادة حالات التقييم)" : "الإيميل اللي تحققنا منه برمز الدخول";
+  $("today").disabled = !staff;
+  showTab("new");
   $("pModel").textContent = (CONFIG.model || "—").split("/").pop();
   $("pData").textContent = DATA_AR[CONFIG.reference_backend] || CONFIG.reference_backend || "غير مربوطة";
   $("pDate").textContent = CONFIG.today;
@@ -485,6 +648,7 @@ function startLive(jobId) {
     }
     panel.classList.remove("card");
     panel.replaceChildren(renderRun(job.trace));
+    watchStaffDecision(job.trace, panel);
     if (window.innerWidth < 980) panel.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   tick();
@@ -515,16 +679,70 @@ function renderStep(s) {
       h("details", { class: "more" }, h("summary", {}, "النتيجة"), h("pre", { class: "ltr" }, pretty(s.tool_result)))));
 }
 
+// The rules' reasons, in words a student understands.
+const REASON_AR = {
+  identity_not_found: "الرقم الوطني على الوثائق مو موجود بالسجل",
+  requester_email_mismatch: "الإيميل مو هو الإيميل المسجّل لصاحب الوثائق",
+  "missing_document:national_id": "البطاقة الشخصية ناقصة",
+  "missing_document:non_employment_certificate": "وثيقة غير العامل ناقصة",
+  "missing_document:graduation_document": "وثيقة التخرج ناقصة",
+  not_a_student: "صاحب الوثائق مو مسجّل كطالب",
+  not_a_graduate: "صاحب الوثائق مو مسجّل كخريج",
+  certificate_expired: "وثيقة غير العامل منتهية الصلاحية",
+  certificate_not_owner: "وثيقة غير العامل مو لصاحب الطلب",
+  employed: "السجل بيقول إنه صاحب الطلب موظف",
+  graduation_document_not_owner: "وثيقة التخرج مو لصاحب الطلب",
+  graduation_document_revoked: "وثيقة التخرج ملغاة",
+  document_of_other_person: "في وثيقة لشخص تاني",
+  foreign_university: "وثيقة التخرج من جامعة تانية",
+  qr_foreign_prefix: "رمز QR بيأشّر لموقع مو رسمي",
+  qr_token_unknown: "رمز QR مو موجود بالسجل",
+  qr_token_revoked: "رمز QR ملغى",
+  qr_other_holder: "رمز QR لشخص تاني",
+  file_rejected: "في ملف مرفوض (نوع أو حجم أو محتوى غير مسموح)",
+  duplicate_request: "نفس الطلب انعمل قبل",
+  no_text_available: "ما قدرنا نقرأ الوثائق",
+  hidden_text_in_document: "في نص مخفي جوّا وثيقة",
+  instruction_like_text_in_document: "في وثيقة نص بيحاول يعطي تعليمات",
+  duplicate_upload: "نفس الملف مرفوع مرتين",
+};
+function reasonAr(r) {
+  if (REASON_AR[r]) return REASON_AR[r];
+  const m = /^(name_not_confirmed|document_not_linked|university_not_named):document_(\d+)$/.exec(r);
+  if (m) return { name_not_confirmed: "الاسم ما بيطابق السجل", document_not_linked: "ما قدرنا نربط الوثيقة بصاحب الطلب",
+    university_not_named: "اسم الجامعة مو واضح" }[m[1]] + ` (الوثيقة ${m[2]})`;
+  return r;
+}
+
+// Human-in-the-loop: the request waits for (or got) a staff member's final yes or no.
+function staffBanner(t) {
+  const c = t.staff_case;
+  if (!c) return null;
+  const problems = (c.reasons || []).map(reasonAr);
+  if (c.status === "pending") {
+    return h("div", { class: "note", style: "margin-top:10px" },
+      h("b", {}, "طلبك وصل للموظف وبانتظار قراره (موافقة أو رفض)."),
+      problems.length ? h("div", { style: "margin-top:6px" }, "الملاحظات اللي لقيناها:",
+        h("ul", {}, ...problems.map(p => h("li", {}, p)))) : h("div", {}, "ما لقينا مشاكل بالوثائق."));
+  }
+  return h("div", { class: "note", style: "margin-top:10px" },
+    h("b", {}, "قرار الموظف النهائي: ", DECISION_AR[c.decision] || c.decision),
+    c.note ? h("div", { dir: "auto" }, c.note) : null);
+}
+
 function hero(t) {
-  const d = t.decision;
+  const c = t.staff_case;
+  // once a staff member decided, that is the answer; before, the request is waiting for them
+  const d = c ? (c.status === "decided" ? c.decision : "needs_review") : t.decision;
   const fo = t.final_output && typeof t.final_output === "object" ? t.final_output : null;
   const ic = { approved: "ok", rejected: "x", needs_review: "q" }[d] || "q";
   return h("div", { class: "hero h-" + (d || "none") },
     h("div", { class: "ico" }, icon(ic)),
     h("div", { style: "flex:1; min-width:0" },
-      h("div", { class: "lbl" }, `${SERVICE_AR[t.service] || t.service} · قرار الإيجنت`),
-      h("div", { class: "dec" }, d ? (DECISION_AR[d] || d) : "بدون قرار"),
-      fo && fo.reason ? h("div", { class: "why", dir: "auto" }, fo.reason) : null,
+      h("div", { class: "lbl" }, `${SERVICE_AR[t.service] || t.service} · ${c ? "قرار الموظف" : "قرار الإيجنت"}`),
+      h("div", { class: "dec" }, c && c.status === "pending" ? "بانتظار قرار الموظف" : (d ? (DECISION_AR[d] || d) : "بدون قرار")),
+      fo && fo.reason && !c ? h("div", { class: "why", dir: "auto" }, fo.reason) : null,
+      staffBanner(t),
       t.error ? h("pre", { class: "ltr" }, t.error) : null,
       h("div", { class: "tags" },
         h("span", { class: "tag" }, STATUS_AR[t.status] || t.status),
@@ -612,7 +830,11 @@ function renderTable() {
     const tr = h("tr", { class: "click" + (SEL === r.run_id ? " sel" : "") },
       h("td", { class: "ltr muted" }, r.timestamp.replace("T", " ").slice(5, 16)),
       h("td", {}, SERVICE_AR[r.service] || r.service),
-      h("td", {}, h("span", { class: "dpill d-" + (r.decision || "none") }, r.decision ? DECISION_AR[r.decision] : (STATUS_AR[r.status] || "—"))),
+      h("td", {}, r.staff_case
+        ? (r.staff_case.status === "pending"
+          ? h("span", { class: "dpill d-needs_review" }, "بانتظار الموظف")
+          : h("span", { class: "dpill d-" + r.staff_case.decision }, "الموظف: " + (DECISION_AR[r.staff_case.decision] || r.staff_case.decision)))
+        : h("span", { class: "dpill d-" + (r.decision || "none") }, r.decision ? DECISION_AR[r.decision] : (STATUS_AR[r.status] || "—"))),
       h("td", {}, eff),
       h("td", { class: "ltr muted hide-sm" }, (r.model || "").split("/").pop()),
       h("td", { class: "muted hide-sm" }, r.latency_s.toFixed(0) + " ث"));
@@ -620,6 +842,7 @@ function renderTable() {
       SEL = r.run_id; renderTable();
       const t = await (await fetch("api/runs/" + r.run_id)).json();
       $("histRun").replaceChildren(renderRun(t));
+      watchStaffDecision(t, $("histRun"));
       $("histRun").scrollIntoView({ behavior: "smooth", block: "start" });
     };
     tbl.append(tr);
@@ -631,10 +854,42 @@ async function loadRuns() {
   renderFilters(); renderTable();
 }
 $("refreshBtn").onclick = loadRuns;
+
+// While a request waits for the staff member, check every 5 seconds and show their decision as soon as it exists.
+const WATCHERS = new Map();  // container -> interval id
+function watchStaffDecision(t, container) {
+  clearInterval(WATCHERS.get(container));
+  WATCHERS.delete(container);
+  if (!t || !t.staff_case || t.staff_case.status !== "pending") return;
+  const id = setInterval(async () => {
+    if (!document.body.contains(container)) { clearInterval(id); return; }
+    const r = await fetch("api/runs/" + t.run_id);
+    if (!r.ok) return;
+    const fresh = await r.json();
+    if (fresh.staff_case && fresh.staff_case.status !== "pending") {
+      clearInterval(id); WATCHERS.delete(container);
+      container.replaceChildren(renderRun(fresh));
+      if (!$("viewHist").classList.contains("hidden")) loadRuns();
+    }
+  }, 5000);
+  WATCHERS.set(container, id);
+}
+// the history list refreshes itself too while any of its requests waits for staff
+setInterval(() => {
+  if (!$("viewHist").classList.contains("hidden") && RUNS.some(r => r.staff_case && r.staff_case.status === "pending")) loadRuns();
+}, 10000);
+let resetArmed = false;
 $("resetBtn").onclick = async () => {
-  if (!confirm("بدك تمسح الإيميلات والتسجيلات والإشعارات من قاعدة حالة الإيجنت؟ (السجل بيضل)")) return;
+  const b = $("resetBtn");
+  if (!resetArmed) {  // no pop-up: the button asks for a second click
+    resetArmed = true; b.textContent = "متأكد؟ اضغط مرة تانية";
+    setTimeout(() => { resetArmed = false; b.textContent = "مسح حالة الإيجنت"; }, 6000);
+    return;
+  }
+  resetArmed = false;
   const r = await fetch("api/reset_state", { method: "POST" });
-  alert(r.ok ? "تم المسح" : "ما زبط: في طلب شغّال");
+  b.textContent = r.ok ? "تم المسح" : "ما زبط: في طلب شغّال";
+  setTimeout(() => { b.textContent = "مسح حالة الإيجنت"; }, 3000);
 };
 
 init();

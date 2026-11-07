@@ -52,10 +52,12 @@ def test_happy_path_trace_metrics_and_side_effects(settings, make_llm, stores, p
     assert sum(m["role"] == "tool" for m in last_msgs) == 3
     assert completion.calls[0]["tools"] and completion.calls[0]["max_tokens"] == 1000
 
-    # persisted as exactly one JSONL line, with document text, without image bytes
+    # persisted as exactly one JSONL line, WITHOUT document text (TRACE_PII=redact) and without image bytes
     lines = read_traces(settings.traces_path)
     assert len(lines) == 1 and lines[0]["run_id"] == r.run_id
-    assert "HIDDEN INSTRUCTION TEXT" in lines[0]["documents"][0]["pages"][0]["text"]
+    assert "HIDDEN INSTRUCTION TEXT" in t.documents[0]["pages"][0]["text"]  # the in-memory result has it
+    assert "HIDDEN INSTRUCTION TEXT" not in settings.traces_path.read_text(encoding="utf-8")
+    assert lines[0]["documents"][0]["pages"][0]["text"].startswith("[not stored:") and lines[0]["pii"] == "redacted"
     assert "base64" not in settings.traces_path.read_text()
     assert lines[0]["config"]["prompt_sha256"] and lines[0]["guard_events"] == []
     assert lines[0]["config"]["today"] == completion.calls[0]["messages"][1]["content"][0]["text"][14:24]

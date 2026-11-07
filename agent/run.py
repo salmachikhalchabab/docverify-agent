@@ -29,8 +29,9 @@ from agent.llm import LLMClient, model_capabilities
 from agent.loop import build_user_content, run_loop
 from agent.prompts import get_prompt, prompt_sha256
 from agent.tools import ToolContext
+from agent.privacy import redact_trace, secret_key
 from agent.trace import RunTrace, append_trace, summarize_side_effects
-from agent.variants import get_variant
+from agent.variants import get_variant, human_approval_mode
 from config import Settings, get_settings
 
 
@@ -67,6 +68,7 @@ def run_agent(
     save: bool = True,
     today: date | None = None,
     on_step: Callable[[Any], None] | None = None,
+    idempotency_scope: str = "",
 ) -> RunResult:
     """Run one request end to end. The keyword-only arguments are for dependency
     injection (tests, evaluation harness); normal callers omit them."""
@@ -75,13 +77,27 @@ def run_agent(
     reference = reference_store or get_reference_store(settings.reference_backend, settings.reference_db_path)
     state = state_store or SQLiteStateStore(settings.state_db_path)
     llm = llm or make_llm(settings)
-    guardrails = spec.guardrails_factory()
     system_prompt = get_prompt(spec.prompt_key)
 
     # Every run tells the model a fixed "today" (config.TODAY unless the caller passes one),
     # so date checks are reproducible.
     today_str = (today or date.fromisoformat(settings.agent_today)).isoformat()
     run_id = uuid.uuid4().hex
+    # The guardrails object sees the request and the stores. The baseline ignores all of it.
+    # who approves actions: decided by the variant (prompt_only_human, guarded_human), not by .env
+    approval = human_approval_mode(spec, settings.human_approval)
+    guardrails = spec.guardrails_factory(
+        service=service,
+        requester_email=requester_email,
+        today=today_str,
+        reference=reference,
+        state=state,
+        ocr_engine=settings.ocr_engine,
+        ocr_lang=settings.ocr_lang,
+        hidden_text_threshold=settings.hidden_text_threshold,
+        human_approval=approval,
+        idempotency_scope=idempotency_scope,
+    )
     t0 = time.perf_counter()
     trace = RunTrace(
         run_id=run_id,
@@ -102,6 +118,9 @@ def run_agent(
             "page_render_dpi": settings.page_render_dpi,
             "max_image_side": settings.max_image_side,
             "ocr_engine": settings.ocr_engine,
+            "hidden_text_threshold": settings.hidden_text_threshold,
+            "human_approval": approval,
+            "trace_pii": settings.trace_pii,
             "reference_backend": settings.reference_backend or None,
         },
     )
@@ -111,6 +130,10 @@ def run_agent(
         state=state,
         artifacts_dir=settings.artifacts_dir,
         notice_font=settings.notice_font_path,
+        service=service,
+        requester_email=requester_email,
+        today=today_str,
+        idempotency_scope=idempotency_scope,
     )
 
     try:
@@ -131,6 +154,8 @@ def run_agent(
         trace.documents = [d.summary() for d in docs]
         docs = guardrails.transform_documents(docs)
         ctx.documents = docs
+        # What the model actually received (equal to `documents` unless a guardrail changed the text).
+        trace.documents_as_sent = [d.summary() for d in docs]
 
         run_loop(
             trace=trace,
@@ -151,12 +176,21 @@ def run_agent(
         trace.error = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=5)}"
     finally:
         trace.guard_events = list(guardrails.events)
+        trace.guard_summary = guardrails.summary()
+    if trace.guard_summary.get("awaiting_staff"):
+        # human-in-the-loop: the request waits for a staff member's final yes or no (agent/approvals.py)
+        gs = trace.guard_summary
+        state.open_staff_case(run_id, service, gs.get("policy_verdict"),
+                              list(gs.get("reasons") or []) + list(gs.get("flags") or []), gs.get("model_decision"))
 
     # Side effects are read back from the store, not taken from tool results.
     trace.side_effects = summarize_side_effects(state.side_effects(run_id))
     trace.compute_metrics(wall_ms=(time.perf_counter() - t0) * 1000.0)
     if save:
-        append_trace(settings.traces_path, trace)
+        record = trace.to_dict()
+        if settings.trace_pii != "full":  # default: no document text, pseudonyms for personal data
+            record = redact_trace(record, reference, secret_key(settings.runs_dir))
+        append_trace(settings.traces_path, record)
 
     return RunResult(
         run_id=run_id,
