@@ -291,6 +291,7 @@ async def start_run(
     requester_email: str = Form(""),
     today: str = Form(""),
     max_steps: str = Form(""),
+    request_text: str = Form(""),
     existing: list[str] = Form(default=[]),
     files: list[UploadFile] = File(default=[]),
 ) -> dict[str, Any]:
@@ -332,6 +333,7 @@ async def start_run(
         kwargs = {
             "service": service, "requester_email": requester_email, "documents": doc_paths, "settings": settings,
             "today": date.fromisoformat(today) if today.strip() else None,
+            "request_text": request_text.strip()[:2000] or None,
         }
         JOBS[job_id] = {"job_id": job_id, "owner": _token(request), "status": "running",
                         "started_at": time.time(), "steps": [],

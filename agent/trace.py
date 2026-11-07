@@ -59,6 +59,7 @@ class RunTrace:
     documents: list[dict[str, Any]]  # Document.summary() for each upload (incl. all extracted text)
     config: dict[str, Any]  # max_steps, sampling params, prompt key + sha256, model capabilities, ...
     steps: list[Step] = field(default_factory=list)
+    request_text: str | None = None  # the requester's free-text message, as typed (untrusted)
     # One entry per guardrail intervention: {step, guard, action, tool, reason, details}. Empty for the baseline.
     guard_events: list[dict[str, Any]] = field(default_factory=list)
     # The documents as the model received them (after transform_documents). Same shape as `documents`.

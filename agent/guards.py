@@ -47,7 +47,7 @@ from typing import Any, Callable
 
 from PIL import Image, ImageOps
 
-from agent.datastore import ReferenceStore, StateStore, UnknownRegistryError
+from agent.datastore import ReferenceStore, RegistryUnavailableError, StateStore, UnknownRegistryError
 from agent.documents import Document, _ocr
 from agent.tools import ToolContext, _decode_qr_png
 from agent.variants import Guardrails
@@ -274,6 +274,7 @@ class RegistryFacts:
     def __init__(self, reference: ReferenceStore):
         self.reference = reference
         self.names = set(reference.registries())
+        self.unavailable = False  # set when a lookup failed because the registry was unreachable
 
     def lookup(self, registry: str, key: str) -> dict[str, Any] | None:
         if registry not in self.names:
@@ -281,6 +282,9 @@ class RegistryFacts:
         try:
             return self.reference.lookup(registry, key)
         except UnknownRegistryError:
+            return None
+        except RegistryUnavailableError:
+            self.unavailable = True
             return None
 
     def person(self, nn: str) -> Person | None:
@@ -583,7 +587,8 @@ class DeterministicGuardrails(Guardrails):
             if self.identity:
                 break
         if self.identity is None:
-            self._reason("identity_not_found", "G4")
+            # an outage is not "unknown person": fail closed (review), never reject the person for it
+            self._reason("registry_unavailable" if self.facts.unavailable else "identity_not_found", "G4")
             return
         if self.document_rules and norm_email(self.requester_email) != (self.identity.registered_email or ""):
             self._reason("requester_email_mismatch", "G4")  # the registered address is not revealed
@@ -726,6 +731,8 @@ class DeterministicGuardrails(Guardrails):
                 self._reason("unknown_service", "policy")
             self._check_earlier_requests()
 
+        if self.facts.unavailable and "registry_unavailable" not in self.reasons:
+            self._reason("registry_unavailable", "G4")  # fail closed: never approve what the registry can't confirm
         hard = [r for r in self.reasons if r.startswith(HARD_REASONS)]
         if hard:
             self.verdict = "rejected"

@@ -12,7 +12,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -29,6 +28,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--service", required=True, help="transcript | masters_registration | graduation_notice")
     ap.add_argument("--email", required=True, help="requester email, as typed")
+    ap.add_argument("--message", default=None, help="the requester's free-text message (optional)")
     ap.add_argument("--doc", action="append", required=True, help="document path (repeatable)")
     ap.add_argument("--variant", default=None, help="default: AGENT_VARIANT from .env")
     ap.add_argument("--dry-run", action="store_true", help="only build and print the first user message")
@@ -42,14 +42,14 @@ def main() -> int:
                           max_pages=s.max_pages_per_document, ocr_engine=s.ocr_engine, ocr_lang=s.ocr_lang)
             for p in a.doc
         ]
-        for part in build_user_content(a.service, a.email, docs, datetime.now(timezone.utc).date().isoformat()):
+        for part in build_user_content(a.service, a.email, docs, s.agent_today, a.message):
             if part["type"] == "text":
                 print(part["text"])
             else:
                 print(f"[image: {len(part['image_url']['url'])} chars of base64 PNG]")
         return 0
 
-    r = run_agent(service=a.service, requester_email=a.email, documents=a.doc, variant=a.variant)
+    r = run_agent(service=a.service, requester_email=a.email, documents=a.doc, variant=a.variant, request_text=a.message)
     t = r.trace
     if a.full:
         print(json.dumps(t.to_dict(), ensure_ascii=False, indent=2, default=str))

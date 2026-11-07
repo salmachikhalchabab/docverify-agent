@@ -29,7 +29,7 @@ import secrets
 from pathlib import Path
 from typing import Any
 
-from agent.datastore import ReferenceStore, UnknownRegistryError
+from agent.datastore import ReferenceStore, RegistryUnavailableError, UnknownRegistryError
 
 _DIGITS = {ord(c): str(i) for i, c in enumerate("٠١٢٣٤٥٦٧٨٩")} | {ord(c): str(i) for i, c in enumerate("۰۱۲۳۴۵۶۷۸۹")}
 _NATIONAL = re.compile(r"(?<!\d)\d{11}(?!\d)")
@@ -59,7 +59,7 @@ def _lookup(reference: ReferenceStore | None, registry: str, key: str) -> dict[s
         return None
     try:
         return reference.lookup(registry, key)
-    except UnknownRegistryError:
+    except (UnknownRegistryError, RegistryUnavailableError):
         return None
 
 

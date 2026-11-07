@@ -31,7 +31,8 @@
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--ink);
   font: 15px/1.65 "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+textarea.field { resize: vertical; min-height: 44px; }
 .ltr { direction: ltr; unicode-bidi: plaintext; }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
@@ -275,6 +276,9 @@ tr.sel td { background: var(--brand-soft); }
           <label class="l" for="email">إيميل مقدّم الطلب</label>
           <input id="email" type="email" class="field ltr" placeholder="name@example.com">
           <div class="hint" id="emailHint">كما كتبه مقدّم الطلب، بدون أي تحقق</div>
+          <label class="l" for="message" style="margin-top:10px">رسالة مقدّم الطلب (اختياري)</label>
+          <textarea id="message" class="field" rows="2" maxlength="2000" dir="auto" placeholder="مثلاً: أرجو إصدار كشف علامات، صورة الهوية مرفقة."></textarea>
+          <div class="hint">بتوصل للإيجنت متل ما انكتبت، بدون أي تحقق</div>
         </div>
         <div class="sec">
           <div class="sec-t"><span>الوثائق المرفقة</span><span id="docCount" class="muted">0 مختارة</span></div>
@@ -609,6 +613,7 @@ $("runBtn").onclick = async () => {
   fd.append("requester_email", $("email").value.trim());
   fd.append("today", $("today").value);
   fd.append("max_steps", $("maxSteps").value);
+  fd.append("request_text", $("message").value.trim());
   selected.forEach(p => fd.append("existing", p));
   for (const f of $("files").files) fd.append("files", f);
   $("runBtn").disabled = true;

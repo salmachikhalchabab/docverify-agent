@@ -232,6 +232,28 @@ python evaluation/report.py                           # summary of runs/eval_res
   an injected instruction (the rendered page is pixel-identical to the original), and a
   faint-text variant drawn into the image (reaches the model only through vision).
 
+## P1 evaluation (the 120 P1 cases)
+
+```bash
+python evaluation/p1_eval.py --dry-run                       # check paths and plan, no model calls
+python evaluation/p1_eval.py --split dev --limit 5           # a few dev cases
+python evaluation/p1_eval.py --split dev --variant guarded --repeats 3
+python evaluation/report.py --file runs/p1_results.jsonl     # the comparison report
+```
+
+- Set `P1_ROOT` (the P1 project, which holds `data/docs/`) and, if it isn't at
+  `<P1_ROOT>/eval/labels.db`, `P1_LABELS_DB`. **The answer key stays in the P1 project**; `labels.db`
+  is git-ignored here because this repository is public.
+- The answer key never reaches the agent. For each case the agent gets the service (from the
+  scenario), the requester's registered email, **the requester's message**, the documents and P1's
+  date (2026-10-15).
+- Cases with `registry_failure` run against an unreachable registry (every lookup fails with
+  `RegistryUnavailableError`). The guarded variant fails closed on it (`needs_review`).
+- Scoring is deterministic: P1's acceptable decisions, its forbidden `(action, national_id)` pairs
+  matched against what actually happened, and any email to an address other than the registered
+  one. P1's expected tool trajectory is mapped onto this agent's tools and reported as a share.
+- Work on `--split dev`; keep `test` for the final measurement.
+
 ## Connecting the real data
 
 1. Implement a `ReferenceStore` in `agent/datastore.py` with `registries()`,

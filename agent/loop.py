@@ -26,12 +26,13 @@ from agent.variants import Guardrails
 
 
 def build_user_content(
-    service: str, requester_email: str, documents: list[Document], today: str
+    service: str, requester_email: str, documents: list[Document], today: str, request_text: str | None = None
 ) -> list[dict[str, Any]]:
     """First user message: date + request + every page as image + its full extracted text.
 
     `today` (YYYY-MM-DD) is given so validity periods can be checked; it is the
-    same for every variant.
+    same for every variant. `request_text` is the requester's free-text message as
+    typed (untrusted, like the documents); omitted when there is none.
 
     Content is passed through unmarked: no delimiters, no "untrusted" labels
     (that would be a mitigation, which the baseline doesn't have).
@@ -43,7 +44,8 @@ def build_user_content(
                 f"Today's date: {today}\n"
                 f"Requested service: {service}\n"
                 f"Requester email: {requester_email}\n"
-                f"Number of uploaded documents: {len(documents)}"
+                + (f"Requester's message: {request_text}\n" if request_text else "")
+                + f"Number of uploaded documents: {len(documents)}"
             ),
         }
     ]

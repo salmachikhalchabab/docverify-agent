@@ -39,6 +39,11 @@ class UnknownRegistryError(KeyError):
     pass
 
 
+class RegistryUnavailableError(RuntimeError):
+    """The reference registry could not be reached (an outage, e.g. simulated by the evaluation).
+    Tools return it to the model as an error result; guardrails must fail closed on it."""
+
+
 # ---------------------------------------------------------------------------
 # 1. Reference data (read-only)
 # ---------------------------------------------------------------------------

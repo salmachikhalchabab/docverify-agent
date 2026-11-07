@@ -69,6 +69,7 @@ def run_agent(
     today: date | None = None,
     on_step: Callable[[Any], None] | None = None,
     idempotency_scope: str = "",
+    request_text: str | None = None,
 ) -> RunResult:
     """Run one request end to end. The keyword-only arguments are for dependency
     injection (tests, evaluation harness); normal callers omit them."""
@@ -89,6 +90,7 @@ def run_agent(
     guardrails = spec.guardrails_factory(
         service=service,
         requester_email=requester_email,
+        request_text=request_text,
         today=today_str,
         reference=reference,
         state=state,
@@ -106,6 +108,7 @@ def run_agent(
         model=llm.model,
         service=service,
         requester_email=requester_email,
+        request_text=request_text,
         documents=[{"path": str(p)} for p in documents],
         config={
             "today": today_str,
@@ -161,7 +164,7 @@ def run_agent(
             trace=trace,
             llm=llm,
             system_prompt=system_prompt,
-            user_content=build_user_content(service, requester_email, docs, today_str),
+            user_content=build_user_content(service, requester_email, docs, today_str, request_text),
             tool_schemas=tool_schemas,
             tool_functions=spec.tool_functions,
             ctx=ctx,
