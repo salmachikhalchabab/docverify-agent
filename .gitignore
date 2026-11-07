@@ -7,3 +7,8 @@ __pycache__/
 *.pyc
 data/p1/registry_agent.sqlite
 data/p1/*.tmp
+
+# P1 answer key: never commit it (the repository is public)
+labels.db
+**/labels.db
+data/p1/eval/
