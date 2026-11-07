@@ -327,6 +327,45 @@ def test_ui_requires_login_and_requesters_cannot_choose_their_address(tmp_path, 
     assert s.get("/api/staff/pending").status_code == 200 and s.get("/api/config").json()["role"] == "staff"
 
 
+def test_ui_version_switch_picks_the_variant_of_each_run(tmp_path, monkeypatch):
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from agent.variants import VARIANTS
+    monkeypatch.setenv("REFERENCE_BACKEND", "mock_sqlite")
+    monkeypatch.setenv("REFERENCE_DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "mock_registry.sqlite"))
+    monkeypatch.setenv("RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setenv("AGENT_VARIANT", "baseline")
+    import ui.app as ui
+    ui.SESSIONS.clear(), ui.FAILS.clear()
+    monkeypatch.setattr(ui, "AUTH_ON", True)
+    monkeypatch.setattr(ui, "VARIANT_SWITCH", True)
+    c = TestClient(ui.app)
+    assert c.post("/api/auth/login", json={"national_number": NN, "email": REG}).status_code == 200
+    cfg = c.get("/api/config").json()
+    assert cfg["variants"] == list(VARIANTS) and cfg["variant"] == "baseline"
+    seen: list[dict] = []
+    monkeypatch.setattr(ui, "run_agent", lambda **kw: seen.append(kw) or (_ for _ in ()).throw(RuntimeError("stop")))
+
+    def run(**extra):
+        n = len(seen)
+        r = c.post("/api/run", data={"service": "transcript", "existing": ["data/documents/national_id_test.png"], **extra})
+        if r.status_code == 200:
+            for _ in range(100):
+                if len(seen) > n and not ui.RUN_LOCK.locked():
+                    break
+                time.sleep(0.02)
+        return r
+
+    assert run(variant="guarded").status_code == 200 and seen[-1]["variant"] == "guarded"
+    assert run().status_code == 200 and seen[-1]["variant"] == "baseline"  # nothing chosen: .env
+    assert run(variant="no_such_variant").status_code == 400
+    monkeypatch.setattr(ui, "VARIANT_SWITCH", False)  # switch off: the form cannot change the variant
+    assert c.get("/api/config").json()["variants"] == []
+    assert run(variant="guarded").status_code == 200 and seen[-1]["variant"] == "baseline"
+
+
 # ---------------------------------------------------------------- trace file safety
 
 

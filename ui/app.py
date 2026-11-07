@@ -47,6 +47,7 @@ from agent.documents import IMAGE_SUFFIXES, PDF_SUFFIXES, load_document  # noqa:
 from agent.privacy import pseudonym, secret_key  # noqa: E402
 from agent.run import run_agent  # noqa: E402
 from agent.trace import read_traces  # noqa: E402
+from agent.variants import VARIANTS  # noqa: E402
 from config import get_settings  # noqa: E402
 from evaluation.run_eval import CASES_PATH  # noqa: E402
 from evaluation.scoring import cases_backend, load_cases  # noqa: E402
@@ -89,6 +90,9 @@ def _safe_path(rel: str, roots: list[Path]) -> Path:
 # ---------------------------------------------------------------------------
 
 AUTH_ON = os.getenv("UI_AUTH", "on").strip().lower() != "off"
+# Demo: a version switch in the page header (every logged-in user). UI_VARIANT_SWITCH=off hides it and
+# every run then uses AGENT_VARIANT from .env. Each run records its variant in the trace either way.
+VARIANT_SWITCH = os.getenv("UI_VARIANT_SWITCH", "on").strip().lower() != "off"
 SESSION_MINUTES = 30
 FAIL_MINUTES = 10
 MAX_FAILS = 5  # wrong logins per national number per FAIL_MINUTES, then blocked for a while
@@ -258,6 +262,7 @@ def config(request: Request) -> dict[str, Any]:
             cases = []
     return {
         "model": s.llm_model, "variant": s.agent_variant, "max_steps": s.max_steps,
+        "variants": list(VARIANTS) if VARIANT_SWITCH else [],
         "reference_backend": s.reference_backend or None, "documents": docs, "cases": cases,
         "cases_backend": cases_backend(CASES_PATH),
         "today": s.agent_today or date.today().isoformat(),
@@ -292,6 +297,7 @@ async def start_run(
     today: str = Form(""),
     max_steps: str = Form(""),
     request_text: str = Form(""),
+    variant: str = Form(""),
     existing: list[str] = Form(default=[]),
     files: list[UploadFile] = File(default=[]),
 ) -> dict[str, Any]:
@@ -301,6 +307,9 @@ async def start_run(
         today = ""  # only staff may move the agent's date (evaluation replays)
     if not requester_email.strip():
         raise HTTPException(400, "requester e-mail missing")
+    variant = variant.strip() if VARIANT_SWITCH else ""
+    if variant and variant not in VARIANTS:
+        raise HTTPException(400, f"unknown variant: {variant}")
     if len([f for f in files if f.filename]) > MAX_UPLOADS:
         raise HTTPException(400, f"at most {MAX_UPLOADS} files")
     if not RUN_LOCK.acquire(blocking=False):
@@ -334,12 +343,14 @@ async def start_run(
             "service": service, "requester_email": requester_email, "documents": doc_paths, "settings": settings,
             "today": date.fromisoformat(today) if today.strip() else None,
             "request_text": request_text.strip()[:2000] or None,
+            "variant": variant or settings.agent_variant,
         }
         JOBS[job_id] = {"job_id": job_id, "owner": _token(request), "status": "running",
                         "started_at": time.time(), "steps": [],
                         "request": {"service": service, "requester_email": requester_email,
                                     "documents": [Path(p).name for p in doc_paths],
                                     "today": today or settings.agent_today, "model": settings.llm_model,
+                                    "variant": variant or settings.agent_variant,
                                     "max_steps": settings.max_steps}}
     except Exception:
         RUN_LOCK.release()

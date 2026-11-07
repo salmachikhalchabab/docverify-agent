@@ -50,6 +50,11 @@ textarea.field { resize: vertical; min-height: 44px; }
 .pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--card2); border: 1px solid var(--line);
   color: var(--muted); display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
 .pill b { color: var(--ink); font-weight: 600; }
+.pill.vpick { border-color: color-mix(in srgb, var(--gold) 55%, var(--line)); color: var(--ink); font-weight: 600; }
+.pill.vpick select { font: inherit; font-weight: 600; color: var(--ink); background: transparent; border: 0;
+  padding: 2px 2px; cursor: pointer; max-width: 230px; }
+.pill.vpick select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 6px; }
+.pill.vpick option { color: #1b2433; background: #fff; }
 .seg { margin-inline-start: auto; display: inline-flex; background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 3px; }
 .seg button { border: 0; background: transparent; padding: 7px 16px; border-radius: 9px; cursor: pointer; color: var(--muted); font-weight: 500; }
 .seg button.on { background: var(--card); color: var(--brand); box-shadow: var(--shadow); font-weight: 600; }
@@ -209,6 +214,8 @@ tr.sel td { background: var(--brand-soft); }
     <div><div class="t">مساعد شؤون الطلاب</div><div class="s" id="subTitle">…</div></div>
   </div>
   <div class="pills">
+    <label class="pill vpick hidden" id="pVariant" title="أي نسخة من الإيجنت بتشتغل على الطلب الجاي">النسخة
+      <select id="variantSel" aria-label="نسخة الإيجنت"></select></label>
     <span class="pill">الموديل <b class="ltr" id="pModel">…</b></span>
     <span class="pill">البيانات <b id="pData">…</b></span>
     <span class="pill">تاريخ اليوم <b class="ltr" id="pDate">…</b></span>
@@ -535,6 +542,27 @@ $("files").onchange = () => {
 const VARIANT_AR = { baseline: "النسخة الأساسية · بدون ضوابط", prompt_only: "تعليمات أمان بالـprompt فقط",
   tools_only: "ضوابط على الأدوات فقط", guarded: "مع الضوابط (guardrails)",
   prompt_only_human: "تعليمات بالـprompt + موافقة موظف", guarded_human: "مع الضوابط + موافقة موظف" };
+const VARIANT_SHORT = { baseline: "أساسية", prompt_only: "تعليمات فقط", tools_only: "ضوابط أدوات",
+  guarded: "مع الضوابط", prompt_only_human: "تعليمات + موظف", guarded_human: "ضوابط + موظف" };
+const VARIANT_KEY = "dv_variant";
+function currentVariant() {
+  const sel = $("variantSel");
+  return sel && sel.value ? sel.value : (CONFIG ? CONFIG.variant : "");
+}
+function setupVariantPicker() {
+  const list = CONFIG.variants || [];
+  $("pVariant").classList.toggle("hidden", !list.length);
+  let v = CONFIG.variant;
+  try { const saved = localStorage.getItem(VARIANT_KEY); if (saved && list.includes(saved)) v = saved; } catch (e) {}
+  const sel = $("variantSel");
+  sel.replaceChildren(...list.map(k => h("option", { value: k }, VARIANT_AR[k] || k)));
+  if (list.length) sel.value = list.includes(v) ? v : list[0];
+  $("subTitle").textContent = VARIANT_AR[currentVariant()] || currentVariant();
+  sel.onchange = () => {
+    try { localStorage.setItem(VARIANT_KEY, sel.value); } catch (e) {}
+    $("subTitle").textContent = VARIANT_AR[sel.value] || sel.value;
+  };
+}
 function showLogin() {
   $("studentLoginCard").classList.toggle("hidden", STAFF_PAGE);
   $("staffLoginCard").classList.toggle("hidden", !STAFF_PAGE);
@@ -551,7 +579,7 @@ async function init() {
   // logged in with the other role for this page: staff go to /staff; a student on /staff sees the staff login
   if (CONFIG.auth && CONFIG.role === "staff" && !STAFF_PAGE) { location.href = "staff"; return; }
   if (CONFIG.auth && CONFIG.role !== "staff" && STAFF_PAGE) { showLogin(); return; }
-  $("subTitle").textContent = VARIANT_AR[CONFIG.variant] || CONFIG.variant;
+  setupVariantPicker();
   const staff = CONFIG.role === "staff";
   $("pUser").textContent = staff ? "موظف" : CONFIG.email;
   $("pUser").classList.toggle("hidden", !CONFIG.auth);
@@ -614,6 +642,7 @@ $("runBtn").onclick = async () => {
   fd.append("today", $("today").value);
   fd.append("max_steps", $("maxSteps").value);
   fd.append("request_text", $("message").value.trim());
+  if (CONFIG.variants && CONFIG.variants.length) fd.append("variant", currentVariant());
   selected.forEach(p => fd.append("existing", p));
   for (const f of $("files").files) fd.append("files", f);
   $("runBtn").disabled = true;
@@ -750,6 +779,7 @@ function hero(t) {
       staffBanner(t),
       t.error ? h("pre", { class: "ltr" }, t.error) : null,
       h("div", { class: "tags" },
+        t.variant ? h("span", { class: "tag" }, "النسخة: " + (VARIANT_AR[t.variant] || t.variant)) : null,
         h("span", { class: "tag" }, STATUS_AR[t.status] || t.status),
         t.parse_error ? h("span", { class: "tag bad" }, "الجواب النهائي مو JSON صالح") : null,
         t.final_fenced ? h("span", { class: "tag" }, "كان الجواب جوّا علامات كود") : null,
@@ -827,7 +857,7 @@ function renderFilters() {
 function renderTable() {
   const rows = RUNS.filter(r => FILTER === "all" || (r.decision || "none") === FILTER);
   const tbl = $("runsTable");
-  tbl.replaceChildren(h("tr", {}, h("th", {}, "الوقت"), h("th", {}, "الخدمة"), h("th", {}, "القرار"), h("th", {}, "شو صار"),
+  tbl.replaceChildren(h("tr", {}, h("th", {}, "الوقت"), h("th", {}, "الخدمة"), h("th", {}, "النسخة"), h("th", {}, "القرار"), h("th", {}, "شو صار"),
     h("th", { class: "hide-sm" }, "الموديل"), h("th", { class: "hide-sm" }, "المدة")));
   for (const r of rows) {
     const se = r.side_effects || {};
@@ -835,6 +865,7 @@ function renderTable() {
     const tr = h("tr", { class: "click" + (SEL === r.run_id ? " sel" : "") },
       h("td", { class: "ltr muted" }, r.timestamp.replace("T", " ").slice(5, 16)),
       h("td", {}, SERVICE_AR[r.service] || r.service),
+      h("td", { class: "muted", title: VARIANT_AR[r.variant] || r.variant || "" }, VARIANT_SHORT[r.variant] || r.variant || "—"),
       h("td", {}, r.staff_case
         ? (r.staff_case.status === "pending"
           ? h("span", { class: "dpill d-needs_review" }, "بانتظار الموظف")
@@ -852,7 +883,7 @@ function renderTable() {
     };
     tbl.append(tr);
   }
-  if (!rows.length) tbl.append(h("tr", {}, h("td", { colspan: 6, class: "muted" }, "ما في تشغيلات.")));
+  if (!rows.length) tbl.append(h("tr", {}, h("td", { colspan: 7, class: "muted" }, "ما في تشغيلات.")));
 }
 async function loadRuns() {
   RUNS = await (await fetch("api/runs")).json();
