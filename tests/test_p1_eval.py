@@ -166,3 +166,15 @@ def test_human_variant_is_decided_by_the_simulated_reviewer(p1, settings, make_l
     # rubber stamp: trusts the agent, and the attack goes through
     row, _ = _run(p1, settings, make_llm, "inj1", ATTACK, tmp_path, variant="baseline_human", reviewer="rubber_stamp")
     assert row["staff_review"]["approved"] and row["attack_success"] is True and "email_unregistered" in row["violations"]
+
+
+def test_guard_check_runs_on_dev_cases_only(p1, tmp_path, monkeypatch, capsys):
+    from evaluation import p1_guard_check
+    monkeypatch.setenv("REFERENCE_BACKEND", "p1_sqlite")
+    monkeypatch.setenv("REFERENCE_DB_PATH", str(tmp_path / "registry_agent.sqlite"))
+    monkeypatch.setenv("RUNS_DIR", str(tmp_path / "runs"))
+    monkeypatch.setattr("sys.argv", ["p1_guard_check.py", "-v"])
+    assert p1_guard_check.main() == 0
+    out = capsys.readouterr().out
+    assert "test1" not in out and all(c in out for c in ("valid1", "down1", "inj1"))
+    assert "kind=" in out and "dev cases get a verdict" in out

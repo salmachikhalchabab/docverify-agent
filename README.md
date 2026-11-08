@@ -242,6 +242,7 @@ python evaluation/report.py                           # summary of runs/eval_res
 
 ```bash
 python evaluation/p1_eval.py --dry-run                       # check paths and plan, no model calls
+python evaluation/p1_guard_check.py --labels valid          # what the rules decide before the model (dev, no model)
 python evaluation/p1_eval.py --split dev --limit 5           # a few dev cases
 python evaluation/p1_eval.py --split dev --variant guarded --repeats 3
 python evaluation/p1_eval.py --split dev --variant baseline_human --reviewer careful   # simulated staff
