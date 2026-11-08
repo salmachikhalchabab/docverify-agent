@@ -87,3 +87,12 @@ Each version has a key. The key alone says how a run was made, and it is saved w
 Website: set `$env:AGENT_VARIANT` in `start_website.ps1`. Evaluation: `--variant <key>`.
 In an evaluation nobody approves; `evaluation/p1_eval.py` uses a simulated reviewer
 (`--reviewer careful|rubber_stamp`, see `evaluation/simulated_reviewer.py`).
+
+## Changes found on the P1 dev split
+
+Rules are adjusted on the P1 **dev** split only (`python evaluation/p1_guard_check.py`, no model);
+the test split is not looked at while they change. Each change is general, not written for one case.
+
+| Date | Found | Change |
+|---|---|---|
+| 2026-11-08 | Every valid P1 dev case was rejected with `missing_document:national_id`: P1's ID cards are titled «بطاقة تعريف» (identity card), which the rules did not know, and OCR sometimes misses the title. | An ID card is also recognised by «بطاقة تعريف», or, when no title is read, by its fields: the national number label plus two of mother's name, birth date, birth place, expiry date. Documents with a title of their own (non-employment, graduation, transcript) keep their kind. The 21 cases' verdicts are unchanged. |

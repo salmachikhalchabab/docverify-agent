@@ -96,11 +96,17 @@ PDF_ACTIVE = (b"/JavaScript", b"/JS ", b"/JS(", b"/Launch", b"/EmbeddedFile", b"
 # Document kinds, recognised by words that say what the paper is (normalised text, see norm_text).
 # Checked in this order; the first match wins. National ID first: only an ID says "identity card".
 KIND_KEYWORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("national_id", ("بطاقه شخصيه", "identity card", "national id card", "هويه شخصيه")),
+    ("national_id", ("بطاقه شخصيه", "بطاقه تعريف", "identity card", "national id card", "هويه شخصيه")),
     ("non_employment_certificate", ("غير عامل", "العاملين في الدوله", "non-employment", "non employment", "not employed")),
     ("transcript", ("كشف علامات", "transcript of records", "academic transcript")),
     ("graduation_document", ("تخرج", "graduat")),
 )
+
+# A national ID whose title OCR missed is still recognisable by its fields: the national number label
+# plus at least two of the personal fields an ID card carries. Used only when no title matched, so a
+# certificate that also lists the person's details (non-employment, graduation) keeps its own kind.
+ID_NUMBER_LABEL = "الرقم الوطني"
+ID_FIELDS = ("اسم الام", "تاريخ الولاده", "مكان الولاده", "تاريخ الانتهاء")
 
 # G9: generic signs that a line talks to an AI / asks for an action. Written once, from the
 # general prompt-injection literature, NOT from our attack documents. An official document has
@@ -558,7 +564,10 @@ class DeterministicGuardrails(Guardrails):
     @staticmethod
     def _kind(text: str) -> str:
         n = norm_text(text)
-        return next((k for k, words in KIND_KEYWORDS if any(w in n for w in words)), "unknown")
+        kind = next((k for k, words in KIND_KEYWORDS if any(w in n for w in words)), "unknown")
+        if kind == "unknown" and ID_NUMBER_LABEL in n and sum(f in n for f in ID_FIELDS) >= 2:
+            return "national_id"
+        return kind
 
     def _enhanced_text(self, doc: Document) -> str:
         """A second, stronger OCR pass (2x, auto-contrast) for checks only; the model never sees it."""

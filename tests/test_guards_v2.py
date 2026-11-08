@@ -559,3 +559,15 @@ def test_staff_can_decide_a_request_with_no_prepared_actions(gsettings, make_llm
     assert state.staff_case(r.run_id)["decision"] == "rejected" and r.run_id not in pending_runs(state)
     with pytest.raises(LookupError):  # decided once; nothing left to decide
         review_run(r.run_id, True, "Mr. Reviewer", settings=gsettings, reference=mock_ref(), state=state)
+
+
+def test_national_id_recognised_by_its_arabic_title_or_by_its_fields():
+    kind = DeterministicGuardrails._kind
+    # OCR text of P1's (fictional) ID cards: titled "بطاقة تعريف", or with the title missed by OCR
+    assert kind("بطاقة تعريف - نموذج تجريبي الاسم الكامل: خالد الحداد الرقم الوطني: 01763070973") == "national_id"
+    assert kind("الاسم الكامل: غنى درويش اسم الأم: منى الشامي تاريخ الولادة: 20/11/2002 مكان الولادة: حمص "
+                "الرقم الوطني: 04632804881 تاريخ الإصدار: 12/4/2021 تاريخ الانتهاء: 12/4/2031") == "national_id"
+    # a certificate listing the person's details keeps its own kind
+    assert kind("طباعة وثيقة غير عامل السجل العام للعاملين في الدولة الرقم الوطني 13572265378 اسم الأم مريم "
+                "تاريخ الولادة 16/10/1999") == "non_employment_certificate"
+    assert kind("الرقم الوطني: 04632804881") == "unknown"  # a number alone does not make an ID card
